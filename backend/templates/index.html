@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Document Chunking & Storage Tool — Home{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge animate-fadeup">🗄️ Database Integration Tool</div>
+  <h1 class="hero-title">
+    Document <span class="gradient-text">Chunking</span> &<br/>PostgreSQL Storage
+  </h1>
+  <p class="hero-subtitle">
+    Upload documents, split them into optimal text blocks using fixed, recursive, or sentence strategies, and sync them directly into a PostgreSQL table.
+  </p>
+  <div class="hero-cta">
+    <a href="/step/1" class="btn btn-primary btn-lg">🚀 Open Chunking Tool</a>
+  </div>
+</section>
+
+<!-- Stats Row -->
+<div style="max-width:700px;margin:0 auto 3rem;padding:0 2rem;">
+  <div class="stats-row">
+    <div class="stat-item animate-fadeup" style="animation-delay:0.1s">
+      <span class="stat-value">Postgres</span>
+      <div class="stat-label">Relational Storage</div>
+    </div>
+    <div class="stat-item animate-fadeup" style="animation-delay:0.2s">
+      <span class="stat-value">3+</span>
+      <div class="stat-label">Chunk Strategies</div>
+    </div>
+    <div class="stat-item animate-fadeup" style="animation-delay:0.3s">
+      <span class="stat-value">Bulk</span>
+      <div class="stat-label">Fast SQL Insertion</div>
+    </div>
+    <div class="stat-item animate-fadeup" style="animation-delay:0.4s">
+      <span class="stat-value">Auto</span>
+      <div class="stat-label">Table Schema Creation</div>
+    </div>
+  </div>
+</div>
+
+<!-- Steps/Features Grid -->
+<section id="features" style="max-width: 900px; margin: 0 auto 4rem; padding: 0 2rem;">
+  <div class="steps-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+    <div class="card step-card" style="--accent-color: var(--cyan)">
+      <div class="step-number">STEP 01</div>
+      <span class="step-icon">✂️</span>
+      <h3>Document Slicing</h3>
+      <p>Configure character counts, overlaps, and method rules to split raw PDFs or text files into structured chunks.</p>
+      <span class="step-badge">Configure</span>
+    </div>
+
+    <div class="card step-card" style="--accent-color: var(--purple)">
+      <div class="step-number">STEP 02</div>
+      <span class="step-icon">🔌</span>
+      <h3>Postgres Verification</h3>
+      <p>Input connection details and test server handshakes to ensure target database schemas are live and ready.</p>
+      <span class="step-badge">Validate</span>
+    </div>
+
+    <div class="card step-card" style="--accent-color: var(--blue)">
+      <div class="step-number">STEP 03</div>
+      <span class="step-icon">💾</span>
+      <h3>Relational Storage</h3>
+      <p>Store split text blocks into custom tables, recording chunk indices, words counts, and strategies automatically.</p>
+      <span class="step-badge">Persist</span>
+    </div>
+  </div>
+</section>
+
+<!-- Flow Diagram -->
+<section style="max-width:900px;margin:0 auto;padding:0 2rem 5rem;">
+  <div class="panel">
+    <div class="panel-title"><span class="dot" style="background-color: var(--purple); box-shadow: 0 0 6px var(--purple);"></span> Data Ingestion Pipeline</div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;justify-content:center;padding:1rem 0;">
+      {% set flow = ["📄 PDF / TXT Source Document", "✂️ Text Slicing (Fixed/Recursive)", "🔌 Database Handshake", "💾 PostgreSQL Insertion"] %}
+      {% for item in flow %}
+        <span class="tag tag-cyan" style="font-size:0.8rem;padding:0.4rem 0.8rem;">{{ item }}</span>
+        {% if not loop.last %}
+          <span style="color:var(--text-muted);">→</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

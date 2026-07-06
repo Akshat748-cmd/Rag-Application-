@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Step 7 — Chunks Re-ranking | RAG Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #060a13;
+      --surface:   #0c1424;
+      --surface2:  #111c30;
+      --border:    rgba(255,255,255,0.08);
+      --cyan:      #38bdf8;
+      --purple:    #a78bfa;
+      --green:     #34d399;
+      --pink:      #f472b6;
+      --yellow:    #fbbf24;
+      --orange:    #fb923c;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(ellipse 70% 50% at 20% -10%, rgba(167,139,250,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 100%, rgba(56,189,248,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(251,146,60,0.04) 0%, transparent 70%);
+    }
+
+    /* NAV */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem;
+      background: rgba(12,20,36,0.8);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 0.7rem; text-decoration: none; }
+    .brand-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      display: grid; place-items: center; font-size: 1.1rem;
+    }
+    .nav-brand span { font-weight: 700; font-size: 0.95rem; color: var(--text-primary); }
+    .step-badge {
+      background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(56,189,248,0.2));
+      border: 1px solid rgba(167,139,250,0.3);
+      color: var(--purple);
+      padding: 0.3rem 0.9rem; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
+    }
+
+    /* MAIN LAYOUT */
+    .page { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+    /* HEADER */
+    .step-header {
+      display: flex; align-items: center; gap: 1.2rem; margin-bottom: 2rem;
+    }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      display: grid; place-items: center;
+      font-size: 1.5rem; font-weight: 800; flex-shrink: 0;
+    }
+    .step-header h1 { font-size: 1.8rem; font-weight: 800; }
+    .step-header p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem; }
+
+    /* PROGRESS */
+    .progress-wrap { margin-bottom: 2rem; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .progress-bar { height: 4px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 87.5%; border-radius: 99px; background: linear-gradient(90deg, var(--purple), var(--cyan)); }
+
+    /* PANELS */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .panel-title {
+      font-size: 0.85rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.2rem;
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--purple); box-shadow: 0 0 8px var(--purple); }
+    .dot-cyan { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+
+    /* FORM */
+    .form-group { margin-bottom: 1.2rem; }
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
+    input, select {
+      width: 100%; padding: 0.7rem 1rem; border-radius: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 0.9rem;
+      outline: none; transition: border-color 0.2s;
+    }
+    input:focus, select:focus { border-color: var(--purple); }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 1.5rem; border-radius: 10px; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      color: #fff; box-shadow: 0 4px 20px rgba(167,139,250,0.25);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(167,139,250,0.35); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* INFO GRID */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    .info-box {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1rem; display: flex; gap: 0.8rem; align-items: flex-start;
+    }
+    .info-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .info-box h4 { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.2rem; }
+    .info-box p  { font-size: 0.76rem; color: var(--text-secondary); line-height: 1.5; }
+
+    /* RERANKED LIST */
+    .results-container { display: none; margin-top: 1.5rem; animation: fadeUp 0.3s ease both; }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: none; } }
+
+    .rank-table {
+      width: 100%; border-collapse: collapse; margin-top: 1rem; text-align: left;
+    }
+    .rank-table th, .rank-table td {
+      padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.82rem;
+    }
+    .rank-table th {
+      background: var(--surface2); font-weight: 700; text-transform: uppercase;
+      font-size: 0.72rem; letter-spacing: 0.05em; color: var(--text-secondary);
+    }
+    .rank-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px; border-radius: 50%; font-weight: 700; font-size: 0.78rem;
+    }
+    .badge-old { background: rgba(255,255,255,0.06); color: var(--text-secondary); }
+    .badge-new { background: var(--purple); color: #fff; box-shadow: 0 0 8px var(--purple); }
+
+    /* Rank Shift styling */
+    .shift-up { color: var(--green); font-weight: bold; }
+    .shift-down { color: var(--pink); font-weight: bold; }
+    .shift-none { color: var(--text-muted); }
+
+    .result-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.1rem 1.3rem; margin-bottom: 0.8rem;
+      border-left: 4px solid var(--purple);
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .result-card:hover {
+      border-color: var(--purple);
+      transform: translateY(-2px);
+    }
+    .result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.7rem; }
+    .score-badge {
+      background: rgba(167,139,250,0.12); color: var(--purple);
+      padding: 0.2rem 0.6rem; border-radius: 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 600;
+    }
+    .result-content { font-size: 0.84rem; color: var(--text-secondary); line-height: 1.6; }
+
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-brand">
+    <div class="brand-icon">🔄</div>
+    <span>RAG Simulator</span>
+  </a>
+  <span class="step-badge">Step 7 of 8 — Re-ranking</span>
+</nav>
+
+<div class="page">
+  <!-- Header -->
+  <div class="step-header">
+    <div class="step-num">7</div>
+    <div>
+      <h1>🔄 Re-rank Chunks</h1>
+      <p>Semantic search se nikale gaye primary results ko query ke exact context ke basis par dubara evaluate karke re-score aur prioritize kiya jata hai.</p>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap">
+    <div class="progress-label"><span>Step 7 of 8</span><span>87.5%</span></div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+
+  <!-- Info Grid -->
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="info-icon">🧠</div>
+      <div>
+        <h4>Cross-Encoder Logic</h4>
+        <p>Cross-encoder model query aur doc content ko ek sath compute karta hai, jo vector distance ke muqable zyadah sophisticated relevant scoring deta hai.</p>
+      </div>
+    </div>
+    <div class="info-box">
+      <div class="info-icon">⚖️</div>
+      <div>
+        <h4>Hybrid Re-scoring</h4>
+        <p>Hum dense vector search similarity (60%) aur sparse keyword overlaps (40%) ko merge karke best relevant ranking assign karte hain.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rerank Panel -->
+  <div class="panel">
+    <div class="panel-title"><span class="dot"></span> Re-ranker Settings</div>
+    
+    <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+      <div class="form-group" style="flex: 2; min-width: 250px; margin-bottom: 0;">
+        <label>ChromaDB Collection</label>
+        <select id="sourceTable">
+          <option value="">⏳ Collections load ho rahi hain...</option>
+        </select>
+      </div>
+      
+      <div class="form-group" style="flex: 1; min-width: 100px; margin-bottom: 0;">
+        <label>Top K Results</label>
+        <input type="number" id="top-k" value="5" min="1" max="10"/>
+      </div>
+      
+      <button class="btn btn-secondary" onclick="loadCollections()" style="margin-bottom: 0;">🔄 Refresh</button>
+    </div>
+
+    <div class="form-group" style="margin-top: 1.2rem;">
+      <label>Search Query</label>
+      <input type="text" id="query-input" placeholder="e.g. b.tech 6 sem syllabus" value="b.tech 6 sem syllabus" onkeypress="handleEnter(event)" />
+    </div>
+
+    <button class="btn btn-primary" id="rerank-btn" onclick="executeRerank()">⚡ Re-rank Chunks</button>
+    <div id="status-message" style="margin-top:0.8rem; font-size:0.8rem;"></div>
+  </div>
+
+  <!-- Results Section -->
+  <div class="results-container" id="results-panel">
+    
+    <!-- Comparison Table Panel -->
+    <div class="panel">
+      <div class="panel-title"><span class="dot"></span> Rank Comparison Dashboard</div>
+      <table class="rank-table">
+        <thead>
+          <tr>
+            <th>New Rank</th>
+            <th>Original Rank</th>
+            <th>Rank Shift</th>
+            <th>Chunk ID</th>
+            <th>Semantic Score</th>
+            <th>Keyword Match</th>
+            <th>Final Score</th>
+          </tr>
+        </thead>
+        <tbody id="comparison-tbody">
+          <!-- Dynamically filled -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Sorted Chunks Panel -->
+    <div class="panel">
+      <div class="panel-title"><span class="dot dot-cyan"></span> Re-prioritized Content (Top matching first)</div>
+      <div id="sources-list">
+        <!-- Filled dynamically -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  function handleEnter(e) {
+    if (e.key === 'Enter') executeRerank();
+  }
+
+  async function loadCollections() {
+    const sel = $('sourceTable');
+    const status = $('status-message');
+    sel.innerHTML = '<option value="">⏳ Loading...</option>';
+    status.textContent = '';
+
+    try {
+      const res = await fetch('/api/collections');
+      const data = await res.json();
+
+      if (!data.collections || data.collections.length === 0) {
+        sel.innerHTML = '<option value="">❌ Koi collection nahi mili — Step 3 se Sync karo</option>';
+        status.style.color = 'var(--yellow)';
+        status.textContent = '⚠️ Step 3 (localhost:8002) mein koi collection sync nahi hui hai.';
+        return;
+      }
+
+      sel.innerHTML = '<option value="">-- Collection chunao --</option>';
+      data.collections.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.name;
+        opt.textContent = `${c.name} (${c.count} chunks)`;
+        sel.appendChild(opt);
+      });
+
+      if (data.collections.length === 1) sel.value = data.collections[0].name;
+
+      status.style.color = 'var(--green)';
+      status.textContent = `✅ ${data.collections.length} collection(s) loaded from ChromaDB`;
+    } catch (e) {
+      sel.innerHTML = '<option value="">❌ Load failed</option>';
+      status.style.color = 'var(--pink)';
+      status.textContent = `❌ Error: ${e.message}`;
+    }
+  }
+
+  async function executeRerank() {
+    const table = $('sourceTable').value;
+    const query = $('query-input').value.trim();
+    const k = parseInt($('top-k').value) || 5;
+    const btn = $('rerank-btn');
+    const status = $('status-message');
+    const resultsPanel = $('results-panel');
+
+    if (!query) {
+      status.style.color = 'var(--yellow)';
+      status.textContent = '⚠️ Query empty nahi ho sakti!';
+      return;
+    }
+    if (!table) {
+      status.style.color = 'var(--yellow)';
+      status.textContent = '⚠️ Pehle database collection choose karein!';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Re-ranking...';
+    status.textContent = '';
+    resultsPanel.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/rerank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_table: table, query: query, top_k: k })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.message || "Re-ranking failed.");
+
+      if (!data.results || data.results.length === 0) {
+        status.style.color = 'var(--yellow)';
+        status.textContent = '⚠️ Query ke liye koi chunks nahi mile.';
+        return;
+      }
+
+      // Populate Rank Comparison Table
+      $('comparison-tbody').innerHTML = data.results.map(r => {
+        let shiftHtml = '';
+        if (r.rank_change > 0) {
+          shiftHtml = `<span class="shift-up">▲ +${r.rank_change}</span>`;
+        } else if (r.rank_change < 0) {
+          shiftHtml = `<span class="shift-down">▼ ${r.rank_change}</span>`;
+        } else {
+          shiftHtml = `<span class="shift-none">-</span>`;
+        }
+
+        return `
+          <tr>
+            <td><span class="rank-badge badge-new">${r.new_rank}</span></td>
+            <td><span class="rank-badge badge-old">${r.original_rank}</span></td>
+            <td>${shiftHtml}</td>
+            <td><strong>${r.id}</strong></td>
+            <td>${(r.semantic_score * 100).toFixed(1)}%</td>
+            <td>${(r.keyword_score * 100).toFixed(1)}%</td>
+            <td><strong>${(r.final_score * 100).toFixed(1)}%</strong></td>
+          </tr>
+        `;
+      }).join('');
+
+      window._allChunks = data.results; // Save chunks for modal
+      // Populate Text Chunks Cards
+      $('sources-list').innerHTML = data.results.map((r, i) => `
+        <div class="result-card" style="animation-delay:${i * 0.05}s; cursor:pointer;" onclick="openChunkModal(${i})">
+          <div class="result-header">
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">
+              ${r.metadata.document_name || table} | Chunk ${r.metadata.chunk_index} (DB ID: ${r.id})
+            </span>
+            <span class="score-badge">Hybrid Score: ${(r.final_score * 100).toFixed(1)}%</span>
+          </div>
+          <div class="result-content">${r.content}</div>
+        </div>
+      `).join('');
+
+      resultsPanel.style.display = 'block';
+      status.style.color = 'var(--green)';
+      status.textContent = `✅ Successfully re-ranked ${data.results.length} chunks in ${data.elapsed_ms} ms`;
+    } catch (e) {
+      status.style.color = 'var(--pink)';
+      status.textContent = `❌ Error: ${e.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '⚡ Re-rank Chunks';
+    }
+  }
+
+  // ── Chunk Modal Functions ──────────────────────────────────────────────────
+  let _modalCurrentIndex = 0;
+
+  function openChunkModal(index) {
+    const chunks = window._allChunks;
+    if (!chunks || !chunks[index]) return;
+    _modalCurrentIndex = index;
+
+    const c = chunks[index];
+    const wordCount = c.content.split(/\s+/).filter(Boolean).length;
+
+    document.getElementById('modal-chunk-id').textContent = `chunk_${String(c.metadata.chunk_index).padStart(3,'0')}`;
+    document.getElementById('modal-word-count').textContent = `${wordCount} words`;
+    document.getElementById('modal-chunk-text').textContent = c.content;
+
+    // Update Prev/Next buttons
+    document.getElementById('modal-prev-btn').disabled = index === 0;
+    document.getElementById('modal-next-btn').disabled = index === chunks.length - 1;
+    document.getElementById('modal-prev-btn').style.opacity = index === 0 ? '0.3' : '1';
+    document.getElementById('modal-next-btn').style.opacity = index === chunks.length - 1 ? '0.3' : '1';
+
+    const modal = document.getElementById('chunk-modal');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeChunkModal(event) {
+    if (event && event.target !== document.getElementById('chunk-modal')) return;
+    document.getElementById('chunk-modal').style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  function navigateModal(dir) {
+    const chunks = window._allChunks;
+    if (!chunks) return;
+    const newIndex = _modalCurrentIndex + dir;
+    if (newIndex >= 0 && newIndex < chunks.length) {
+      openChunkModal(newIndex);
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('chunk-modal');
+    if (!modal || modal.style.display !== 'flex') return;
+    if (e.key === 'Escape') { modal.style.display = 'none'; document.body.style.overflow = ''; }
+    if (e.key === 'ArrowRight') navigateModal(1);
+    if (e.key === 'ArrowLeft')  navigateModal(-1);
+  });
+
+  // Load collections initially
+  window.addEventListener('DOMContentLoaded', loadCollections);
+</script>
+
+<!-- Chunk Full-Text Modal -->
+<div id="chunk-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); align-items:center; justify-content:center;" onclick="closeChunkModal(event)">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; max-width:700px; width:92%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+    <!-- Modal Header -->
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1.2rem 1.5rem; border-bottom:1px solid var(--border);">
+      <div style="display:flex; align-items:center; gap:0.8rem;">
+        <span id="modal-chunk-id" style="background:rgba(167,139,250,0.15); color:var(--purple); font-family:monospace; font-size:0.85rem; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;"></span>
+        <span id="modal-word-count" style="color:var(--text-muted); font-size:0.8rem;"></span>
+      </div>
+      <button onclick="closeChunkModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; line-height:1; padding:0.2rem 0.5rem; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">&#x2715;</button>
+    </div>
+    <!-- Modal Body -->
+    <div style="padding:1.5rem; overflow-y:auto; flex:1;">
+      <p id="modal-chunk-text" style="line-height:1.8; color:var(--text-primary); font-size:0.92rem; white-space:pre-wrap; margin:0;"></p>
+    </div>
+    <!-- Modal Footer -->
+    <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--text-muted); font-size:0.78rem;">Esc ya bahar click karo band karne ke liye</span>
+      <div style="display:flex; gap:0.6rem;">
+         <button id="modal-prev-btn" onclick="navigateModal(-1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">&#8592; Prev</button>
+         <button id="modal-next-btn" onclick="navigateModal(1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">Next &#8594;</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Step 4 — RAG App | RAG Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #060a13;
+      --surface:   #0c1424;
+      --surface2:  #111c30;
+      --border:    rgba(255,255,255,0.08);
+      --cyan:      #38bdf8;
+      --purple:    #a78bfa;
+      --green:     #34d399;
+      --pink:      #f472b6;
+      --yellow:    #fbbf24;
+      --orange:    #fb923c;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(ellipse 70% 50% at 20% -10%, rgba(251,146,60,0.1) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 90% 100%, rgba(167,139,250,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(56,189,248,0.05) 0%, transparent 70%);
+    }
+
+    /* NAV */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem;
+      background: rgba(12,20,36,0.8);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 0.7rem; text-decoration: none; }
+    .brand-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      display: grid; place-items: center; font-size: 1.1rem;
+    }
+    .nav-brand span { font-weight: 700; font-size: 0.95rem; color: var(--text-primary); }
+    .step-badge {
+      background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(167,139,250,0.2));
+      border: 1px solid rgba(56,189,248,0.3);
+      color: var(--cyan);
+      padding: 0.3rem 0.9rem; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
+    }
+
+    /* MAIN LAYOUT */
+    .page { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+    /* HEADER */
+    .step-header {
+      display: flex; align-items: center; gap: 1.2rem; margin-bottom: 2rem;
+    }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      display: grid; place-items: center;
+      font-size: 1.5rem; font-weight: 800; flex-shrink: 0;
+    }
+    .step-header h1 { font-size: 1.8rem; font-weight: 800; }
+    .step-header p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem; }
+
+    /* PROGRESS */
+    .progress-wrap { margin-bottom: 2rem; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .progress-bar { height: 4px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--cyan), var(--purple)); }
+
+    /* PANELS */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .panel-title {
+      font-size: 0.85rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.2rem;
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+    .dot-purple { background: var(--purple); box-shadow: 0 0 8px var(--purple); }
+
+    /* FORM */
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
+    input, select {
+      width: 100%; padding: 0.65rem 1rem; border-radius: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 0.88rem;
+      outline: none; transition: border 0.2s;
+    }
+    input:focus, select:focus { border-color: var(--cyan); }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.65rem 1.4rem; border-radius: 10px; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #fff; box-shadow: 0 4px 20px rgba(56,189,248,0.3);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(56,189,248,0.4); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* SEARCH RESULTS */
+    .search-box { display: flex; gap: 0.8rem; }
+    .search-box input { flex: 1; }
+
+    .result-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 0.8rem;
+      animation: fadeUp 0.3s ease both;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .result-card:hover {
+      border-color: var(--purple);
+      transform: translateY(-2px);
+    }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: none; } }
+    
+    .answer-card {
+      background: rgba(167, 139, 250, 0.1); border: 1px solid var(--purple);
+      border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
+      animation: fadeUp 0.3s ease both;
+      font-size: 0.95rem; line-height: 1.6;
+    }
+
+    .result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+    .score-badge {
+      background: rgba(52,211,153,0.12); color: var(--green);
+      padding: 0.2rem 0.6rem; border-radius: 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 600;
+    }
+    .result-content { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; }
+
+    /* Info boxes */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    .info-box {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1rem; display: flex; gap: 0.8rem; align-items: flex-start;
+    }
+    .info-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .info-box h4 { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.2rem; }
+    .info-box p  { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; }
+
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-brand">
+    <div class="brand-icon">🤖</div>
+    <span>RAG Simulator</span>
+  </a>
+  <span class="step-badge">Step 4 of 4 — Generation</span>
+</nav>
+
+<div class="page">
+  <div class="step-header">
+    <div class="step-num">4</div>
+    <div>
+      <h1>🤖 Retrieval-Augmented Generation</h1>
+      <p>ChromaDB se similar chunks retrieve karo, aur LLM (Gemini) ko context de kar final answer generate karo.</p>
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-label"><span>Step 4 of 4</span><span>100%</span></div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="info-icon">⚙️</div>
+      <div>
+        <h4>Backend API Key</h4>
+        <p>API Key backend code (core/generator.py) mein configure ki gayi hai, user ko daalne ki zaroorat nahi hai.</p>
+      </div>
+    </div>
+    <div class="info-box">
+      <div class="info-icon">✨</div>
+      <div>
+        <h4>Contextual Generation</h4>
+        <p>AI sirf aapke diye gaye data (Vector DB se aaye chunks) ke basis par answer dega, na ki apni knowledge se.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config Panel -->
+  <div class="panel">
+    <div class="panel-title"><span class="dot"></span> 1. Settings</div>
+    <div style="display: flex; gap: 1rem; align-items: flex-end;">
+      <div class="form-group" style="flex: 1; margin-bottom:0;">
+        <label>ChromaDB Collection (Step 3 se synced)</label>
+        <select id="sourceTable">
+          <option value="">⏳ Collections load ho rahi hain...</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" onclick="loadCollections()" style="flex-shrink:0; margin-bottom:0;">🔄 Refresh</button>
+    </div>
+    <div id="collection-status" style="margin-top:0.6rem; font-size:0.78rem;"></div>
+  </div>
+
+  <!-- Chat Panel -->
+  <div class="panel">
+    <div class="panel-title"><span class="dot dot-purple"></span> 2. Ask a Question</div>
+    
+    <div class="search-box">
+      <input type="text" id="query-input" placeholder="Apne documents ke baare mein kuch pucho..." onkeypress="handleEnter(event)"/>
+      <button class="btn btn-primary" id="ask-btn" onclick="performGenerate()">🧠 Generate Answer</button>
+    </div>
+    
+    <div id="results-container" style="margin-top: 1.5rem; display: none;">
+      <h3 style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem;">AI Response:</h3>
+      <div id="answer-content" class="answer-card"></div>
+      
+      <h3 style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; margin-top: 1.5rem;">Retrieved Context (Sources):</h3>
+      <div id="sources-container"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function handleEnter(e) {
+  if (e.key === 'Enter') performGenerate();
+}
+
+async function loadCollections() {
+  const sel = $('sourceTable');
+  const status = $('collection-status');
+  sel.innerHTML = '<option value="">⏳ Loading...</option>';
+  status.textContent = '';
+
+  try {
+    const res = await fetch('/api/collections');
+    const data = await res.json();
+
+    if (!data.collections || data.collections.length === 0) {
+      sel.innerHTML = '<option value="">❌ Koi collection nahi mili — Step 3 se Sync karo pehle</option>';
+      status.style.color = 'var(--yellow)';
+      status.textContent = '⚠️ Step 3 (localhost:8002) mein koi table sync nahi hui hai.';
+      return;
+    }
+
+    sel.innerHTML = '<option value="">-- Collection chunao --</option>';
+    data.collections.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.name;
+      opt.textContent = `${c.name}  (${c.count} chunks)`;
+      sel.appendChild(opt);
+    });
+
+    // Auto-select first
+    if (data.collections.length === 1) sel.value = data.collections[0].name;
+
+    status.style.color = 'var(--green)';
+    status.textContent = `✅ ${data.collections.length} collection(s) mili ChromaDB se`;
+  } catch(e) {
+    sel.innerHTML = '<option value="">❌ Load failed</option>';
+    status.style.color = 'var(--pink)';
+    status.textContent = `❌ Error: ${e.message}`;
+  }
+}
+
+async function performGenerate() {
+  const table = $('sourceTable').value.trim();
+  const query = $('query-input').value.trim();
+  const status = $('collection-status');
+
+  if (!query) {
+    status.style.color = 'var(--yellow)';
+    status.textContent = '⚠️ Query khali nahi ho sakti!';
+    $('query-input').focus();
+    return;
+  }
+  if (!table) {
+    status.style.color = 'var(--yellow)';
+    status.textContent = '⚠️ Pehle collection select karo!';
+    return;
+  }
+
+  $('ask-btn').disabled = true;
+  $('ask-btn').innerHTML = '<span class="spinner"></span> Generating...';
+  $('results-container').style.display = 'none';
+  status.textContent = '';
+
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_table: table, query: query, top_k: 5 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || data.message);
+
+    // Display Answer
+    $('answer-content').innerText = data.answer;
+
+    // Display Sources
+    if (data.retrieved_chunks && data.retrieved_chunks.length > 0) {
+      window._allChunks = data.retrieved_chunks; // Save chunks for modal
+      $('sources-container').innerHTML = data.retrieved_chunks.map((r, i) => `
+        <div class="result-card" style="animation-delay:${i * 0.05}s; cursor:pointer;" onclick="openChunkModal(${i})">
+          <div class="result-header">
+            <span style="font-size:0.75rem; color:var(--text-muted);">${r.metadata.document_name || table} | Chunk ${r.metadata.chunk_index}</span>
+            <span class="score-badge">Similarity: ${(r.score * 100).toFixed(1)}%</span>
+          </div>
+          <div class="result-content">${r.content}</div>
+        </div>
+      `).join('');
+    } else {
+      $('sources-container').innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Koi context chunk nahi mila.</div>';
+    }
+
+    $('results-container').style.display = 'block';
+  } catch(e) {
+    status.style.color = 'var(--pink)';
+    status.textContent = `❌ Error: ${e.message}`;
+  } finally {
+    $('ask-btn').disabled = false;
+    $('ask-btn').innerHTML = '🧠 Generate Answer';
+  }
+}
+
+// ── Chunk Modal Functions ──────────────────────────────────────────────────
+let _modalCurrentIndex = 0;
+
+function openChunkModal(index) {
+  const chunks = window._allChunks;
+  if (!chunks || !chunks[index]) return;
+  _modalCurrentIndex = index;
+
+  const c = chunks[index];
+  const wordCount = c.content.split(/\s+/).filter(Boolean).length;
+
+  document.getElementById('modal-chunk-id').textContent = `chunk_${String(c.metadata.chunk_index).padStart(3,'0')}`;
+  document.getElementById('modal-word-count').textContent = `${wordCount} words`;
+  document.getElementById('modal-chunk-text').textContent = c.content;
+
+  // Update Prev/Next buttons
+  document.getElementById('modal-prev-btn').disabled = index === 0;
+  document.getElementById('modal-next-btn').disabled = index === chunks.length - 1;
+  document.getElementById('modal-prev-btn').style.opacity = index === 0 ? '0.3' : '1';
+  document.getElementById('modal-next-btn').style.opacity = index === chunks.length - 1 ? '0.3' : '1';
+
+  const modal = document.getElementById('chunk-modal');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeChunkModal(event) {
+  if (event && event.target !== document.getElementById('chunk-modal')) return;
+  document.getElementById('chunk-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function navigateModal(dir) {
+  const chunks = window._allChunks;
+  if (!chunks) return;
+  const newIndex = _modalCurrentIndex + dir;
+  if (newIndex >= 0 && newIndex < chunks.length) {
+    openChunkModal(newIndex);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('chunk-modal');
+  if (!modal || modal.style.display !== 'flex') return;
+  if (e.key === 'Escape') { modal.style.display = 'none'; document.body.style.overflow = ''; }
+  if (e.key === 'ArrowRight') navigateModal(1);
+  if (e.key === 'ArrowLeft')  navigateModal(-1);
+});
+
+// Auto-load collections on page load
+window.addEventListener('DOMContentLoaded', loadCollections);
+</script>
+
+<!-- Chunk Full-Text Modal -->
+<div id="chunk-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); align-items:center; justify-content:center;" onclick="closeChunkModal(event)">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; max-width:700px; width:92%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+    <!-- Modal Header -->
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1.2rem 1.5rem; border-bottom:1px solid var(--border);">
+      <div style="display:flex; align-items:center; gap:0.8rem;">
+        <span id="modal-chunk-id" style="background:rgba(167,139,250,0.15); color:var(--purple); font-family:monospace; font-size:0.85rem; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;"></span>
+        <span id="modal-word-count" style="color:var(--text-muted); font-size:0.8rem;"></span>
+      </div>
+      <button onclick="closeChunkModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; line-height:1; padding:0.2rem 0.5rem; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">&#x2715;</button>
+    </div>
+    <!-- Modal Body -->
+    <div style="padding:1.5rem; overflow-y:auto; flex:1;">
+      <p id="modal-chunk-text" style="line-height:1.8; color:var(--text-primary); font-size:0.92rem; white-space:pre-wrap; margin:0;"></p>
+    </div>
+    <!-- Modal Footer -->
+    <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--text-muted); font-size:0.78rem;">Esc ya bahar click karo band karne ke liye</span>
+      <div style="display:flex; gap:0.6rem;">
+         <button id="modal-prev-btn" onclick="navigateModal(-1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">&#8592; Prev</button>
+         <button id="modal-next-btn" onclick="navigateModal(1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">Next &#8594;</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

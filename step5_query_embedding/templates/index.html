@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Step 5 — Query Embedding | RAG Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #060a13;
+      --surface:   #0c1424;
+      --surface2:  #111c30;
+      --border:    rgba(255,255,255,0.08);
+      --cyan:      #38bdf8;
+      --purple:    #a78bfa;
+      --green:     #34d399;
+      --pink:      #f472b6;
+      --yellow:    #fbbf24;
+      --orange:    #fb923c;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(ellipse 70% 50% at 20% -10%, rgba(56,189,248,0.1) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 100%, rgba(167,139,250,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(52,211,153,0.04) 0%, transparent 70%);
+    }
+
+    /* NAV */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem;
+      background: rgba(12,20,36,0.8);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 0.7rem; text-decoration: none; }
+    .brand-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      display: grid; place-items: center; font-size: 1.1rem;
+    }
+    .nav-brand span { font-weight: 700; font-size: 0.95rem; color: var(--text-primary); }
+    .step-badge {
+      background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(167,139,250,0.2));
+      border: 1px solid rgba(56,189,248,0.3);
+      color: var(--cyan);
+      padding: 0.3rem 0.9rem; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
+    }
+
+    /* MAIN LAYOUT */
+    .page { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+    /* HEADER */
+    .step-header {
+      display: flex; align-items: center; gap: 1.2rem; margin-bottom: 2rem;
+    }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      display: grid; place-items: center;
+      font-size: 1.5rem; font-weight: 800; flex-shrink: 0;
+    }
+    .step-header h1 { font-size: 1.8rem; font-weight: 800; }
+    .step-header p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem; }
+
+    /* PROGRESS */
+    .progress-wrap { margin-bottom: 2rem; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .progress-bar { height: 4px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 62.5%; border-radius: 99px; background: linear-gradient(90deg, var(--cyan), var(--purple)); }
+
+    /* PANELS */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .panel-title {
+      font-size: 0.85rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.2rem;
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+    .dot-purple { background: var(--purple); box-shadow: 0 0 8px var(--purple); }
+
+    /* FORM ELEMENTS */
+    .form-group { margin-bottom: 1.2rem; }
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem; }
+    input {
+      width: 100%; padding: 0.75rem 1.1rem; border-radius: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 0.92rem;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15); }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 1.6rem; border-radius: 10px; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #fff; box-shadow: 0 4px 20px rgba(56,189,248,0.25);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(56,189,248,0.35); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* INFO GRID */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    .info-box {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1rem; display: flex; gap: 0.8rem; align-items: flex-start;
+    }
+    .info-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .info-box h4 { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.2rem; }
+    .info-box p  { font-size: 0.76rem; color: var(--text-secondary); line-height: 1.5; }
+
+    /* VECTOR VISUALIZATION */
+    .emb-bar-wrap {
+      margin-top: 1.5rem; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.2rem;
+    }
+    .emb-bar-label { font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.8rem; }
+    .emb-bar {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      height: 120px; padding: 0.5rem 0; border-bottom: 1px dashed rgba(255,255,255,0.1);
+      position: relative;
+    }
+    .emb-bar::before {
+      content: ''; position: absolute; left: 0; right: 0; top: 50%;
+      height: 1px; background: rgba(255,255,255,0.1); z-index: 1;
+    }
+    .emb-bar-cell {
+      flex: 1; margin: 0 1px; border-radius: 2px; position: relative; z-index: 2;
+      transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .bar-pos { background: var(--cyan); transform-origin: bottom; }
+    .bar-neg { background: var(--pink); transform-origin: top; margin-bottom: 60px; }
+
+    /* RESULTS VIEW */
+    .results-panel { display: none; animation: fadeUp 0.3s ease both; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+    .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.2rem; }
+    .meta-card {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 0.8rem 1rem; text-align: center;
+    }
+    .meta-value { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 700; color: var(--cyan); }
+    .meta-label { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .json-wrap {
+      background: #04070d; border: 1px solid var(--border); border-radius: 10px;
+      padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+      max-height: 250px; overflow-y: auto; color: var(--purple); line-height: 1.5;
+    }
+
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .alert {
+      padding: 0.8rem 1.1rem; border-radius: 10px; font-size: 0.85rem; margin-top: 1rem; display: none;
+    }
+    .alert-error { background: rgba(244,114,182,0.1); border: 1px solid var(--pink); color: var(--pink); }
+    .alert-success { background: rgba(52,211,153,0.1); border: 1px solid var(--green); color: var(--green); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-brand">
+    <div class="brand-icon">🧠</div>
+    <span>RAG Simulator</span>
+  </a>
+  <span class="step-badge">Step 5 of 8 — Query Embedding</span>
+</nav>
+
+<div class="page">
+  <!-- Header -->
+  <div class="step-header">
+    <div class="step-num">5</div>
+    <div>
+      <h1>🧠 Embed the Query</h1>
+      <p>Aapke question/query ko text se vector dimensions vector me translate kiya jaata hai, taaki iska matching semantic context database se dhoonda jaa sake.</p>
+    </div>
+  </div>
+
+  <!-- Progress Bar -->
+  <div class="progress-wrap">
+    <div class="progress-label"><span>Step 5 of 8</span><span>62.5%</span></div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+
+  <!-- Info Grid -->
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="info-icon">🔄</div>
+      <div>
+        <h4>Same Model Consistency</h4>
+        <p>Hamesha vahi exact embedding model (<strong>all-MiniLM-L6-v2</strong>) use kiya jata hai jo Step 2 me content chunks ko embed karne ke liye use kiya gaya tha.</p>
+      </div>
+    </div>
+    <div class="info-box">
+      <div class="info-icon">📐</div>
+      <div>
+        <h4>384 Dimensions Array</h4>
+        <p>Query ek numeric vector array me transform ho jati hai, jisme direction aur semantic relationships store hoti hain.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generator Panel -->
+  <div class="panel">
+    <div class="panel-title"><span class="dot"></span> Query Input</div>
+    
+    <div class="form-group">
+      <label for="query-input">Enter User Query / Question</label>
+      <input type="text" id="query-input" placeholder="e.g. what is this document about?" value="what is this document about" onkeypress="handleEnter(event)" />
+    </div>
+
+    <button class="btn btn-primary" id="embed-btn" onclick="generateQueryEmbedding()">⚡ Generate Query Embedding</button>
+    
+    <div class="alert alert-error" id="error-alert"></div>
+    <div class="alert alert-success" id="success-alert"></div>
+  </div>
+
+  <!-- Results Panel -->
+  <div class="panel results-panel" id="results-panel">
+    <div class="panel-title"><span class="dot dot-purple"></span> Generated Query Vector Output</div>
+    
+    <!-- Meta Cards -->
+    <div class="meta-grid">
+      <div class="meta-card">
+        <div class="meta-value" id="meta-model">-</div>
+        <div class="meta-label">Model</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-value" id="meta-dims">0</div>
+        <div class="meta-label">Dimensions</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-value" id="meta-time">0 ms</div>
+        <div class="meta-label">Time Elapsed</div>
+      </div>
+    </div>
+
+    <!-- Vector Visualization -->
+    <div class="emb-bar-wrap">
+      <div class="emb-bar-label">First 32 dimensions preview (cyan = positive, pink = negative value)</div>
+      <div class="emb-bar" id="emb-bar-preview">
+        <!-- Bars dynamically generated -->
+      </div>
+    </div>
+
+    <!-- Scrollable Vector -->
+    <div style="margin-top: 1.5rem;">
+      <label>Complete 384-dimensional Vector JSON</label>
+      <pre class="json-wrap" id="vector-json"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  function handleEnter(e) {
+    if (e.key === 'Enter') generateQueryEmbedding();
+  }
+
+  async function generateQueryEmbedding() {
+    const query = $('query-input').value.trim();
+    const btn = $('embed-btn');
+    const errAlert = $('error-alert');
+    const succAlert = $('success-alert');
+    const resultsPanel = $('results-panel');
+
+    if (!query) {
+      errAlert.textContent = "⚠️ Query field khali nahi ho sakti!";
+      errAlert.style.display = 'block';
+      succAlert.style.display = 'none';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Embedding...';
+    errAlert.style.display = 'none';
+    succAlert.style.display = 'none';
+    resultsPanel.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/embed-query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.message || "Failed to embed query.");
+
+      // Load Stats
+      $('meta-model').textContent = data.model_name;
+      $('meta-dims').textContent = data.dimensions;
+      $('meta-time').textContent = data.elapsed_ms + " ms";
+
+      // Render Visualization (First 32 Dims)
+      const previewDims = data.embedding.slice(0, 32);
+      const maxVal = Math.max(...previewDims.map(Math.abs)) || 1;
+      
+      const barsHtml = previewDims.map(val => {
+        const heightPct = Math.max(Math.round((Math.abs(val) / maxVal) * 100), 5);
+        const cls = val >= 0 ? 'bar-pos' : 'bar-neg';
+        return `<div class="emb-bar-cell ${cls}" style="height: ${heightPct}%" title="Value: ${val.toFixed(6)}"></div>`;
+      }).join('');
+      
+      $('emb-bar-preview').innerHTML = barsHtml;
+
+      // Render JSON
+      $('vector-json').textContent = JSON.stringify(data.embedding, null, 2);
+
+      // Display results
+      resultsPanel.style.display = 'block';
+      succAlert.textContent = "✅ Query embedding successfully generated!";
+      succAlert.style.display = 'block';
+
+    } catch (e) {
+      errAlert.textContent = `❌ Error: ${e.message}`;
+      errAlert.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '⚡ Generate Query Embedding';
+    }
+  }
+</script>
+</body>
+</html>

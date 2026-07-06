@@ -1,0 +1,616 @@
+{% extends "base.html" %}
+{% block title %}Step 1 — Create Chunks | RAG Simulator{% endblock %}
+
+{% block content %}
+<div class="step-page">
+  <!-- Header -->
+  <div class="step-header animate-fadeup">
+    <div class="step-num">1</div>
+    <div>
+      <h1>✂️ Create Chunks</h1>
+      <p>Upload a document or paste text, then split it into smaller chunks for processing.</p>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div style="margin-bottom:1.5rem;">
+    <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.4rem;">
+      <span>Step 1 of 8</span><span>12.5%</span>
+    </div>
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill" style="width:12.5%"></div>
+    </div>
+  </div>
+
+  <!-- Input Panel -->
+  <div class="panel animate-fadeup" style="animation-delay:0.1s">
+    <div class="panel-title"><span class="dot"></span> Input Document</div>
+
+    <!-- File Upload -->
+    <div class="form-group">
+      <label>Upload PDF or TXT File</label>
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="file-input" accept=".pdf,.txt"/>
+        <span class="upload-icon">📂</span>
+        <div class="upload-text">
+          <strong>Click to upload</strong> or drag & drop<br/>
+          <small>PDF, TXT supported</small>
+        </div>
+      </div>
+      <div id="upload-status"></div>
+    </div>
+
+    <div class="divider" style="display:flex;align-items:center;gap:1rem;">
+      <span style="font-size:0.8rem;color:var(--text-muted);">OR paste text directly</span>
+    </div>
+
+    <!-- Text Paste -->
+    <div class="form-group">
+      <label for="doc-text">Document Text</label>
+      <textarea id="doc-text" rows="6" placeholder="Paste your document text here..."></textarea>
+    </div>
+
+    <!-- Chunking Settings -->
+    <div class="two-col" style="margin-bottom:1rem;">
+      <div class="form-group">
+        <label for="strategy">Chunking Strategy</label>
+        <select id="strategy">
+          <option value="fixed">Fixed Size</option>
+          <option value="recursive">Recursive</option>
+          <option value="sentence">Sentence-based</option>
+          <option value="paragraph">Paragraph</option>
+          <option value="token">Token-based</option>
+          <option value="sliding_window">Sliding Window</option>
+        </select>
+      </div>
+    <div class="form-group">
+      <label for="chunk-size">Chunk Size: <span id="chunk-size-val">200</span> <span id="chunk-size-unit">(words)</span></label>
+      <input type="range" id="chunk-size" min="10" max="500" value="200"
+             oninput="document.getElementById('chunk-size-val').textContent=this.value"/>
+    </div>
+  </div>
+
+    <div class="form-group">
+      <label for="overlap"><span id="overlap-label">Overlap (words)</span>: <span id="overlap-val">20</span></label>
+      <input type="range" id="overlap" min="0" max="100" value="20"
+             oninput="document.getElementById('overlap-val').textContent=this.value"/>
+    </div>
+
+    <button class="btn btn-primary" id="chunk-btn" onclick="runChunking()">
+      ✂️ Create Chunks
+    </button>
+  </div>
+
+  <!-- Output Panel -->
+  <div class="panel" id="output-panel" style="display:none;">
+    <div class="panel-title"><span class="dot"></span> Generated Chunks <small style="font-size:0.72rem;color:var(--text-muted);font-weight:400;">— kisi bhi chunk par click karo full text dekhne ke liye</small></div>
+    <div id="stats-row" class="stats-row" style="margin-bottom:1rem;"></div>
+    <div class="chunks-container" id="chunks-list"></div>
+  </div>
+
+  <!-- Chunk Full-Text Modal -->
+  <div id="chunk-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); align-items:center; justify-content:center;" onclick="closeChunkModal(event)">
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; max-width:700px; width:92%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+      <!-- Modal Header -->
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:1.2rem 1.5rem; border-bottom:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:0.8rem;">
+          <span id="modal-chunk-id" style="background:rgba(56,189,248,0.15); color:var(--cyan); font-family:monospace; font-size:0.85rem; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;"></span>
+          <span id="modal-word-count" style="color:var(--text-muted); font-size:0.8rem;"></span>
+          <span id="modal-sentence-badge" style="font-size:0.75rem; padding:0.2rem 0.6rem; border-radius:20px;"></span>
+        </div>
+        <button onclick="closeChunkModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; line-height:1; padding:0.2rem 0.5rem; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">&#x2715;</button>
+      </div>
+      <!-- Modal Body -->
+      <div style="padding:1.5rem; overflow-y:auto; flex:1;">
+        <p id="modal-chunk-text" style="line-height:1.8; color:var(--text-primary); font-size:0.92rem; white-space:pre-wrap; margin:0;"></p>
+      </div>
+      <!-- Modal Footer -->
+      <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:var(--text-muted); font-size:0.78rem;">Esc ya bahar click karo band karne ke liye</span>
+        <div style="display:flex; gap:0.6rem;">
+          <button id="modal-prev-btn" onclick="navigateModal(-1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">&#8592; Prev</button>
+          <button id="modal-next-btn" onclick="navigateModal(1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">Next &#8594;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PostgreSQL Sync Panel -->
+  <div class="panel animate-fadeup" id="postgres-panel" style="display:none; margin-top: 1.5rem;">
+    <div class="panel-title"><span class="dot" style="background-color: var(--purple); box-shadow: 0 0 6px var(--purple);"></span> PostgreSQL Database Sync</div>
+    <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:1rem;">
+      Chunks ko PostgreSQL mein save karo. Table automatically create ho jaegi agar exist nahi karti.
+    </p>
+
+    <!-- Chunk count badge -->
+    <div id="pg-chunk-info" style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.2); border-radius:10px; padding:0.6rem 1rem; margin-bottom:1rem; font-size:0.82rem; color:var(--cyan); display:none;">
+      📦 <span id="pg-chunk-count">0</span> chunks ready to save
+    </div>
+
+    <div class="form-group" style="margin-bottom:1rem;">
+      <label for="pg-uri">PostgreSQL Connection URI</label>
+      <input type="text" id="pg-uri" value="postgresql://postgres:Akshat%402004@localhost:2004/postgres" placeholder="postgresql://user:pass@host:port/db"/>
+    </div>
+
+    <div class="form-group" style="margin-bottom:1rem;">
+      <label for="pg-doc-name">Table Name <small style="color:var(--text-muted);">(file upload pe auto-fill, ya khud likho)</small></label>
+      <div style="display:flex; gap:0.6rem; align-items:center;">
+        <input type="text" id="pg-doc-name" placeholder="e.g. resume  ya  ml_notes" style="font-weight:600; color: var(--purple); flex:1;"/>
+        <span style="color:var(--text-muted); font-size:0.75rem; white-space:nowrap;">&#8594; table name</span>
+      </div>
+      <small id="pg-table-preview" style="color:var(--cyan); display:block; margin-top:4px; font-family:monospace;"></small>
+    </div>
+    <!-- hidden actual table name -->
+    <input type="hidden" id="pg-table" value=""/>
+
+    <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
+      <button class="btn btn-secondary" id="pg-test-btn" onclick="testPostgresConnection()">🔌 Test Connection</button>
+      <button class="btn btn-primary" id="pg-store-btn" onclick="storePostgresChunks()"
+        style="background: linear-gradient(135deg, var(--purple), var(--pink)); border-color: var(--purple); box-shadow: 0 4px 20px rgba(124,58,237,0.3);">
+        💾 Save to PostgreSQL
+      </button>
+      <button class="btn btn-secondary" id="pg-view-btn" onclick="viewSavedData()" style="display:none;">
+        👁 Verify Saved Data
+      </button>
+    </div>
+
+    <div id="pg-status" style="margin-top:1rem;"></div>
+
+    <!-- Inline data viewer -->
+    <div id="pg-data-viewer" style="display:none; margin-top:1rem;">
+      <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;" id="pg-viewer-info"></div>
+      <div style="overflow-x:auto; max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:10px;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.75rem;">
+          <thead>
+            <tr style="background:rgba(255,255,255,0.05); position:sticky; top:0;">
+              <th style="padding:0.5rem 0.8rem; text-align:left; color:var(--cyan); border-bottom:1px solid var(--border);">ID</th>
+              <th style="padding:0.5rem 0.8rem; text-align:left; color:var(--cyan); border-bottom:1px solid var(--border);">Chunk #</th>
+              <th style="padding:0.5rem 0.8rem; text-align:left; color:var(--cyan); border-bottom:1px solid var(--border);">Content (preview)</th>
+              <th style="padding:0.5rem 0.8rem; text-align:left; color:var(--cyan); border-bottom:1px solid var(--border);">Words</th>
+              <th style="padding:0.5rem 0.8rem; text-align:left; color:var(--cyan); border-bottom:1px solid var(--border);">Strategy</th>
+            </tr>
+          </thead>
+          <tbody id="pg-viewer-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <div class="step-nav">
+    <a href="/" class="btn btn-secondary">← Back to Home</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Helper: filename -> safe table name (e.g. "My Resume.pdf" -> "my_resume_pdf")
+// PostgreSQL max identifier length = 63 characters — truncate and re-trim underscores
+function fileNameToTableName(filename) {
+  return filename
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')  // replace spaces/dots/special chars with _
+    .replace(/^_+|_+$/g, '')      // trim leading/trailing underscores
+    .substring(0, 63)             // cap at PostgreSQL's 63-char identifier limit
+    .replace(/_+$/g, '');         // trim any trailing underscore left after truncation
+}
+
+// File upload
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  showAlert('upload-status', `Uploading ${file.name}...`, 'info');
+  try {
+    const result = await API.upload(file);
+    document.getElementById('doc-text').value = result.text;
+    // Auto-fill doc name from filename
+    document.getElementById('pg-doc-name').value = file.name;
+    updateTablePreview();
+    showAlert('upload-status', `✅ Extracted ${result.word_count} words from "${file.name}"`, 'success');
+  } catch(err) {
+    showAlert('upload-status', err.message, 'error');
+  }
+});
+
+// Live preview: as user types in pg-doc-name, show what table name will be
+function updateTablePreview() {
+  const raw = document.getElementById('pg-doc-name').value.trim();
+  const tableName = fileNameToTableName(raw);
+  const preview = document.getElementById('pg-table-preview');
+  if (tableName) {
+    document.getElementById('pg-table').value = tableName;
+    preview.textContent = 'Table banegi: ' + tableName;
+    preview.style.color = 'var(--cyan)';
+  } else {
+    document.getElementById('pg-table').value = '';
+    preview.textContent = '';
+  }
+}
+document.getElementById('pg-doc-name').addEventListener('input', updateTablePreview);
+
+// Drag & drop
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', async e => {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    document.getElementById('file-input').files = e.dataTransfer.files;
+    document.getElementById('file-input').dispatchEvent(new Event('change'));
+  }
+});
+
+async function testPostgresConnection() {
+  const uri = document.getElementById('pg-uri').value.trim();
+  if (!uri) { showAlert('pg-status', '⚠️ Connection URI daalo pehle!', 'warning'); return; }
+  setLoading('pg-test-btn', true, '🔌 Test Connection');
+  showAlert('pg-status', 'Testing database connection...', 'info');
+  try {
+    const res = await fetch('/api/chunk/test-db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connection_uri: uri })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Connection failed');
+    showAlert('pg-status', `✅ ${data.message}`, 'success');
+  } catch(err) {
+    showAlert('pg-status', `❌ Connection failed: ${err.message}`, 'error');
+  } finally {
+    setLoading('pg-test-btn', false, '🔌 Test Connection');
+  }
+}
+
+async function storePostgresChunks() {
+  const chunks = PipelineState.get('chunks');
+  if (!chunks || chunks.length === 0) {
+    showAlert('pg-status', '⚠️ Pehle chunks banao! (upar "Create Chunks" button dabao)', 'warning');
+    return;
+  }
+
+  const uri = document.getElementById('pg-uri').value.trim();
+  if (!uri) {
+    showAlert('pg-status', '⚠️ Connection URI daalo!', 'warning');
+    return;
+  }
+
+  const rawDocName = document.getElementById('pg-doc-name').value.trim();
+  if (!rawDocName) {
+    showAlert('pg-status', '⚠️ Table ka naam daalo! (neeche wala field)', 'warning');
+    document.getElementById('pg-doc-name').focus();
+    document.getElementById('pg-doc-name').style.border = '1.5px solid #fbbf24';
+    return;
+  }
+  document.getElementById('pg-doc-name').style.border = '';
+
+  const tableName = fileNameToTableName(rawDocName);
+  document.getElementById('pg-table').value = tableName;
+
+  setLoading('pg-store-btn', true, '💾 Save to PostgreSQL');
+  showAlert('pg-status', `⏳ ${chunks.length} chunks table "${tableName}" mein store ho rahe hain...`, 'info');
+
+  try {
+    const strategy = document.getElementById('strategy').value;
+    const payloadChunks = chunks.map((c) => ({
+      id: c.id,
+      text: c.text,
+      strategy: c.strategy || strategy
+    }));
+
+    const res = await fetch('/api/chunk/store-db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chunks: payloadChunks,
+        table_name: tableName,
+        connection_uri: uri
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to store chunks');
+
+    showAlert('pg-status',
+      `✅ ${data.inserted_count} chunks successfully save ho gaye table "${tableName}" mein!<br>
+       <span style="font-size:0.78rem; color:var(--text-muted);">pgAdmin → Databases → postgres → Schemas → public → Tables → ${tableName}</span>`,
+      'success');
+
+    // Show verify button
+    document.getElementById('pg-view-btn').style.display = 'inline-block';
+    document.getElementById('pg-view-btn').dataset.table = tableName;
+
+    // Auto-load preview
+    setTimeout(() => viewSavedData(tableName), 600);
+
+  } catch(err) {
+    showAlert('pg-status', `❌ Save failed: ${err.message}<br><small>Check karo: server chal raha ho, URI sahi ho, PostgreSQL on hoon.</small>`, 'error');
+  } finally {
+    setLoading('pg-store-btn', false, '💾 Save to PostgreSQL');
+  }
+}
+
+async function viewSavedData(tableNameOverride) {
+  const uri = document.getElementById('pg-uri').value.trim();
+  const tableName = tableNameOverride || document.getElementById('pg-view-btn').dataset.table || document.getElementById('pg-table').value;
+  if (!tableName) {
+    showAlert('pg-status', '⚠️ Pehle chunks save karo!', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('pg-view-btn');
+  btn.disabled = true; btn.textContent = '⏳ Loading...';
+
+  try {
+    const res = await fetch('/api/chunk/view-db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table_name: tableName, connection_uri: uri, limit: 50 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to fetch data');
+
+    const viewer = document.getElementById('pg-data-viewer');
+    const tbody = document.getElementById('pg-viewer-tbody');
+    const info = document.getElementById('pg-viewer-info');
+
+    info.textContent = `Table "${tableName}" — Total ${data.total} rows (showing first ${data.rows.length})`;
+
+    if (!data.rows || data.rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:1rem; text-align:center; color:var(--text-muted);">No rows found</td></tr>';
+    } else {
+      tbody.innerHTML = data.rows.map(r => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition:background 0.15s;"
+            onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='';">
+          <td style="padding:0.45rem 0.8rem; color:var(--text-muted);">${r.id}</td>
+          <td style="padding:0.45rem 0.8rem; color:var(--cyan); font-family:monospace;">#${r.chunk_index}</td>
+          <td style="padding:0.45rem 0.8rem; max-width:380px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text-primary);" title="${r.content.replace(/"/g,'&quot;')}">${r.content.substring(0,120)}${r.content.length>120?'...':''}</td>
+          <td style="padding:0.45rem 0.8rem; color:var(--text-secondary);">${r.word_count}</td>
+          <td style="padding:0.45rem 0.8rem;"><span style="background:rgba(56,189,248,0.12); color:var(--cyan); padding:0.15rem 0.5rem; border-radius:20px; font-size:0.72rem;">${r.strategy}</span></td>
+        </tr>
+      `).join('');
+    }
+    viewer.style.display = 'block';
+  } catch(err) {
+    showAlert('pg-status', `❌ Data load failed: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '👁 Verify Saved Data';
+  }
+}
+
+async function runChunking() {
+  const text = document.getElementById('doc-text').value.trim();
+  if (!text) { showAlert('upload-status', 'Please enter or upload text first.', 'warning'); return; }
+
+  const strategy = document.getElementById('strategy').value;
+  const chunkSize = parseInt(document.getElementById('chunk-size').value);
+  const overlap   = parseInt(document.getElementById('overlap').value);
+
+  // Build strategy-specific opts — correct parameter names per backend
+  let opts = {};
+  if (strategy === 'sentence') {
+    // sentences_per_chunk = chunkSize slider (in sentences), overlap = sentence overlap (clamped to max sentences_per_chunk-1)
+    const sentOverlap = Math.min(overlap, Math.max(0, chunkSize - 1));
+    opts = { sentences_per_chunk: chunkSize, overlap: sentOverlap };
+  } else if (strategy === 'token') {
+    opts = { chunk_size: chunkSize, overlap: overlap };
+  } else if (strategy === 'sliding_window') {
+    opts = { chunk_size: chunkSize, overlap: overlap };
+  } else if (strategy === 'paragraph') {
+    opts = { chunk_size: chunkSize, overlap: overlap };
+  } else if (strategy === 'recursive') {
+    opts = { chunk_size: chunkSize, overlap: overlap };
+  } else {
+    // fixed
+    opts = { chunk_size: chunkSize, overlap: overlap };
+  }
+
+  setLoading('chunk-btn', true);
+  try {
+    const result = await API.chunk(text, strategy, opts);
+
+    // Save state
+    PipelineState.set('text', text);
+    PipelineState.set('chunks', result.chunks);
+
+    // Update PostgreSQL panel chunk count badge
+    document.getElementById('pg-chunk-count').textContent = result.total_chunks;
+    document.getElementById('pg-chunk-info').style.display = 'block';
+    // Reset data viewer on new chunking
+    document.getElementById('pg-data-viewer').style.display = 'none';
+    document.getElementById('pg-view-btn').style.display = 'none';
+
+    // Render stats
+    document.getElementById('stats-row').innerHTML = `
+      <div class="stat-item"><span class="stat-value">${result.total_chunks}</span><div class="stat-label">Chunks</div></div>
+      <div class="stat-item"><span class="stat-value">${result.total_words}</span><div class="stat-label">Total Words</div></div>
+      <div class="stat-item"><span class="stat-value">${result.strategy}</span><div class="stat-label">Strategy</div></div>
+    `;
+
+    // Render chunks — store globally for modal navigation
+    window._allChunks = result.chunks;
+    const container = document.getElementById('chunks-list');
+    container.innerHTML = result.chunks.map((c, i) => {
+      const endsAtSentence = /[.!?]["'\)]*$/.test(c.text.trim());
+      const preview = c.text.length > 260 ? c.text.substring(0, 260) + '...' : c.text;
+      return `
+      <div class="chunk-item" style="--i:${i}; cursor:pointer; transition: transform 0.15s, box-shadow 0.15s;"
+           onclick="openChunkModal(${i})"
+           onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 30px rgba(56,189,248,0.15)'"
+           onmouseout="this.style.transform=''; this.style.boxShadow=''"
+           title="Click karke full text dekho">
+        <div class="chunk-header">
+          <span class="chunk-id">chunk_${String(c.id).padStart(3,'0')}</span>
+          <div style="display:flex; align-items:center; gap:0.6rem;">
+            ${endsAtSentence
+              ? '<span style="font-size:0.7rem; background:rgba(52,211,153,0.15); color:#34d399; padding:0.15rem 0.5rem; border-radius:20px;">sentence complete</span>'
+              : '<span style="font-size:0.7rem; background:rgba(251,191,36,0.12); color:#fbbf24; padding:0.15rem 0.5rem; border-radius:20px;">partial</span>'
+            }
+            <span class="chunk-meta">${c.word_count} words</span>
+            <span style="color:var(--text-muted); font-size:0.72rem;">&#128269; click</span>
+          </div>
+        </div>
+        <div class="chunk-text">${preview}</div>
+      </div>
+    `}).join('');
+
+    document.getElementById('output-panel').style.display = 'block';
+    document.getElementById('postgres-panel').style.display = 'block';
+
+  } catch(err) {
+    showAlert('upload-status', err.message, 'error');
+  } finally {
+
+    setLoading('chunk-btn', false, '✂️ Create Chunks');
+  }
+}
+
+// Restore from state
+window.addEventListener('DOMContentLoaded', () => {
+  const chunks = PipelineState.get('chunks');
+  const text = PipelineState.get('text');
+  if (text) document.getElementById('doc-text').value = text;
+  if (chunks && chunks.length) {
+    document.getElementById('postgres-panel').style.display = 'block';
+  }
+
+  // Update chunk-size label and overlap label based on selected strategy
+  const strategySelect = document.getElementById('strategy');
+  const chunkSizeUnit   = document.getElementById('chunk-size-unit');
+  const chunkSizeSlider = document.getElementById('chunk-size');
+  const chunkSizeVal    = document.getElementById('chunk-size-val');
+  const overlapSlider   = document.getElementById('overlap');
+  const overlapVal      = document.getElementById('overlap-val');
+  const overlapLabel    = document.getElementById('overlap-label');
+
+  function updateStrategyLabel() {
+    const s = strategySelect.value;
+    if (s === 'sentence') {
+      chunkSizeUnit.textContent = '(sentences per chunk)';
+      chunkSizeSlider.min = 1;
+      chunkSizeSlider.max = 20;
+      chunkSizeSlider.value = 3;
+      chunkSizeVal.textContent = 3;
+      // Overlap = sentence overlap (max = sentences_per_chunk - 1)
+      overlapLabel.textContent = 'Overlap (sentences)';
+      overlapSlider.min = 0;
+      overlapSlider.max = 5;
+      overlapSlider.value = 1;
+      overlapVal.textContent = 1;
+    } else if (s === 'token') {
+      chunkSizeUnit.textContent = '(approx tokens)';
+      chunkSizeSlider.min = 64;
+      chunkSizeSlider.max = 2048;
+      chunkSizeSlider.value = 512;
+      chunkSizeVal.textContent = 512;
+      overlapLabel.textContent = 'Overlap (tokens)';
+      overlapSlider.min = 0;
+      overlapSlider.max = 200;
+      overlapSlider.value = 50;
+      overlapVal.textContent = 50;
+    } else if (s === 'sliding_window') {
+      chunkSizeUnit.textContent = '(words)';
+      chunkSizeSlider.min = 10;
+      chunkSizeSlider.max = 500;
+      chunkSizeSlider.value = 100;
+      chunkSizeVal.textContent = 100;
+      overlapLabel.textContent = 'Overlap (words)';
+      overlapSlider.min = 0;
+      overlapSlider.max = 100;
+      overlapSlider.value = 50;
+      overlapVal.textContent = 50;
+    } else if (s === 'paragraph' || s === 'recursive') {
+      chunkSizeUnit.textContent = '(max words per chunk)';
+      chunkSizeSlider.min = 10;
+      chunkSizeSlider.max = 500;
+      chunkSizeSlider.value = 200;
+      chunkSizeVal.textContent = 200;
+      overlapLabel.textContent = 'Overlap (words)';
+      overlapSlider.min = 0;
+      overlapSlider.max = 100;
+      overlapSlider.value = 0;
+      overlapVal.textContent = 0;
+    } else {
+      // fixed
+      chunkSizeUnit.textContent = '(words)';
+      chunkSizeSlider.min = 10;
+      chunkSizeSlider.max = 500;
+      chunkSizeSlider.value = 200;
+      chunkSizeVal.textContent = 200;
+      overlapLabel.textContent = 'Overlap (words)';
+      overlapSlider.min = 0;
+      overlapSlider.max = 100;
+      overlapSlider.value = 20;
+      overlapVal.textContent = 20;
+    }
+  }
+
+  strategySelect.addEventListener('change', updateStrategyLabel);
+  updateStrategyLabel();
+});
+
+// ── Chunk Modal Functions ──────────────────────────────────────────────────
+let _modalCurrentIndex = 0;
+
+function openChunkModal(index) {
+  const chunks = window._allChunks;
+  if (!chunks || !chunks[index]) return;
+  _modalCurrentIndex = index;
+
+  const c = chunks[index];
+  const endsAtSentence = /[.!?]["'\)]*$/.test(c.text.trim());
+
+  document.getElementById('modal-chunk-id').textContent = `chunk_${String(c.id).padStart(3,'0')}`;
+  document.getElementById('modal-word-count').textContent = `${c.word_count} words`;
+
+  const badge = document.getElementById('modal-sentence-badge');
+  if (endsAtSentence) {
+    badge.textContent = 'sentence complete ✓';
+    badge.style.background = 'rgba(52,211,153,0.15)';
+    badge.style.color = '#34d399';
+  } else {
+    badge.textContent = 'partial sentence';
+    badge.style.background = 'rgba(251,191,36,0.12)';
+    badge.style.color = '#fbbf24';
+  }
+
+  document.getElementById('modal-chunk-text').textContent = c.text;
+
+  // Update Prev/Next buttons
+  document.getElementById('modal-prev-btn').disabled = index === 0;
+  document.getElementById('modal-next-btn').disabled = index === chunks.length - 1;
+  document.getElementById('modal-prev-btn').style.opacity = index === 0 ? '0.3' : '1';
+  document.getElementById('modal-next-btn').style.opacity = index === chunks.length - 1 ? '0.3' : '1';
+
+  const modal = document.getElementById('chunk-modal');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeChunkModal(event) {
+  // Close only if clicking backdrop (not the inner card)
+  if (event && event.target !== document.getElementById('chunk-modal')) return;
+  document.getElementById('chunk-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function navigateModal(dir) {
+  const chunks = window._allChunks;
+  if (!chunks) return;
+  const newIndex = _modalCurrentIndex + dir;
+  if (newIndex >= 0 && newIndex < chunks.length) {
+    openChunkModal(newIndex);
+  }
+}
+
+// Keyboard support: Esc to close, Arrow keys to navigate
+document.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('chunk-modal');
+  if (modal.style.display !== 'flex') return;
+  if (e.key === 'Escape') { modal.style.display = 'none'; document.body.style.overflow = ''; }
+  if (e.key === 'ArrowRight') navigateModal(1);
+  if (e.key === 'ArrowLeft')  navigateModal(-1);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}Document Chunking & Storage Tool{% endblock %}</title>
+  <meta name="description" content="Learn Retrieval-Augmented Generation step-by-step through interactive visualizations."/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+<canvas id="particles-canvas"></canvas>
+
+<!-- Navigation -->
+<nav class="navbar">
+  <a href="/" class="nav-brand">
+    <div class="brand-icon">🤖</div>
+    <span>Chunking & Postgres Tool</span>
+  </a>
+
+  <a href="/" class="nav-home-btn">← Home</a>
+</nav>
+
+<!-- Main Content -->
+<div class="page-wrapper">
+  {% block content %}{% endblock %}
+</div>
+
+<script src="/static/js/particles.js"></script>
+<script src="/static/js/api.js"></script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

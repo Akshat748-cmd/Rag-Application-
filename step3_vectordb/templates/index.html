@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Step 3 — Vector DB | RAG Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #060a13;
+      --surface:   #0c1424;
+      --surface2:  #111c30;
+      --border:    rgba(255,255,255,0.08);
+      --cyan:      #38bdf8;
+      --purple:    #a78bfa;
+      --green:     #34d399;
+      --pink:      #f472b6;
+      --yellow:    #fbbf24;
+      --orange:    #fb923c;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(ellipse 70% 50% at 20% -10%, rgba(251,146,60,0.1) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 90% 100%, rgba(167,139,250,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(56,189,248,0.05) 0%, transparent 70%);
+    }
+
+    /* NAV */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem;
+      background: rgba(12,20,36,0.8);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 0.7rem; text-decoration: none; }
+    .brand-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--orange), var(--pink));
+      display: grid; place-items: center; font-size: 1.1rem;
+    }
+    .nav-brand span { font-weight: 700; font-size: 0.95rem; color: var(--text-primary); }
+    .step-badge {
+      background: linear-gradient(135deg, rgba(251,146,60,0.2), rgba(244,114,182,0.2));
+      border: 1px solid rgba(251,146,60,0.3);
+      color: var(--orange);
+      padding: 0.3rem 0.9rem; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
+    }
+
+    /* MAIN LAYOUT */
+    .page { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+    /* HEADER */
+    .step-header {
+      display: flex; align-items: center; gap: 1.2rem; margin-bottom: 2rem;
+    }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--orange), var(--pink));
+      display: grid; place-items: center;
+      font-size: 1.5rem; font-weight: 800; flex-shrink: 0;
+    }
+    .step-header h1 { font-size: 1.8rem; font-weight: 800; }
+    .step-header p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem; }
+
+    /* PROGRESS */
+    .progress-wrap { margin-bottom: 2rem; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .progress-bar { height: 4px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 37.5%; border-radius: 99px; background: linear-gradient(90deg, var(--orange), var(--pink)); }
+
+    /* PANELS */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .panel-title {
+      font-size: 0.85rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.2rem;
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+    .dot-orange { background: var(--orange); box-shadow: 0 0 8px var(--orange); }
+    .dot-pink { background: var(--pink); box-shadow: 0 0 8px var(--pink); }
+
+    /* FORM */
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
+    input, select {
+      width: 100%; padding: 0.65rem 1rem; border-radius: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 0.88rem;
+      outline: none; transition: border 0.2s;
+    }
+    input:focus, select:focus { border-color: var(--orange); }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.65rem 1.4rem; border-radius: 10px; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--orange), var(--pink));
+      color: #fff; box-shadow: 0 4px 20px rgba(251,146,60,0.3);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(251,146,60,0.4); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* ALERT */
+    .alert { padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.85rem; margin-top: 0.8rem; }
+    .alert-success { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.25); color: var(--green); }
+    .alert-error   { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.25); color: #f87171; }
+    .alert-info    { background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2);  color: var(--cyan); }
+
+    /* SEARCH RESULTS */
+    .search-box { display: flex; gap: 0.8rem; }
+    .search-box input { flex: 1; }
+
+    .result-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 0.8rem;
+      animation: fadeUp 0.3s ease both;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .result-card:hover {
+      border-color: var(--orange);
+      transform: translateY(-2px);
+    }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: none; } }
+    .result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+    .score-badge {
+      background: rgba(52,211,153,0.12); color: var(--green);
+      padding: 0.2rem 0.6rem; border-radius: 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 600;
+    }
+    .result-content { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; }
+
+    /* Info boxes */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    .info-box {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1rem; display: flex; gap: 0.8rem; align-items: flex-start;
+    }
+    .info-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .info-box h4 { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.2rem; }
+    .info-box p  { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; }
+
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-brand">
+    <div class="brand-icon">🗄️</div>
+    <span>RAG Simulator</span>
+  </a>
+  <span class="step-badge">Step 3 of 8 — Vector DB</span>
+</nav>
+
+<div class="page">
+  <div class="step-header">
+    <div class="step-num">3</div>
+    <div>
+      <h1>🗄️ Vector DB (Chroma)</h1>
+      <p>Embeddings ko ek actual Vector Database (ChromaDB) mein store karke Semantic Search karo.</p>
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-label"><span>Step 3 of 8</span><span>37.5%</span></div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="info-icon">📦</div>
+      <div>
+        <h4>Vector DB kyu?</h4>
+        <p>Normal DB sirf exact words match karta hai. Vector DB "Meaning" match karta hai using numbers.</p>
+      </div>
+    </div>
+    <div class="info-box">
+      <div class="info-icon">🔍</div>
+      <div>
+        <h4>Semantic Search</h4>
+        <p>Aap jo bhi search karoge, usko vector banayenge aur ChromaDB mein sabse similar chunks dhundenge (Cosine Similarity).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config Panel -->
+  <div class="panel">
+    <div class="panel-title"><span class="dot dot-orange"></span> 1. Sync Postgres to ChromaDB</div>
+    
+    <div class="form-group">
+      <label>Embedded Table Select karo (Step 2 se)</label>
+      <select id="table-select">
+        <option value="">-- Pehle Load Tables dabao --</option>
+      </select>
+    </div>
+
+    <div style="display:flex; gap:0.8rem; margin-top:1rem; flex-wrap:wrap;">
+      <button class="btn btn-secondary" id="load-btn" onclick="loadTables()">🔄 Load Tables</button>
+      <button class="btn btn-primary" id="sync-btn" onclick="syncToChroma()">📥 Sync to ChromaDB</button>
+    </div>
+    <div id="sync-status"></div>
+  </div>
+
+  <!-- Search Panel -->
+  <div class="panel" id="search-panel" style="display:none;">
+    <div class="panel-title"><span class="dot dot-pink"></span> 2. Semantic Search</div>
+    
+    <div class="search-box">
+      <input type="text" id="query-input" placeholder="Kuch search karo (e.g., 'machine learning kya hai?')" onkeypress="handleEnter(event)"/>
+      <button class="btn btn-primary" id="search-btn" onclick="performSearch()">🔍 Search</button>
+    </div>
+    <div id="search-status"></div>
+
+    <div id="results-container" style="margin-top: 1.5rem;"></div>
+  </div>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function showAlert(containerId, msg, type='info') {
+  const icons = { success:'✅', error:'❌', info:'ℹ️' };
+  $(containerId).innerHTML = `<div class="alert alert-${type}">${icons[type]} ${msg}</div>`;
+}
+
+async function loadTables() {
+  $('load-btn').disabled = true;
+  $('load-btn').innerHTML = '<span class="spinner"></span>';
+  try {
+    const res = await fetch('/api/tables');
+    const data = await res.json();
+    
+    if (!res.ok) {
+      showAlert('sync-status', 'Database Error: ' + (data.detail || 'Connection failed'), 'error');
+      return;
+    }
+    
+    const sel = $('table-select');
+    sel.innerHTML = '<option value="">-- Table chunao --</option>';
+    
+    if (!data.tables || data.tables.length === 0) {
+      showAlert('sync-status', 'PostgreSQL connect ho gaya, par "embeddings" table mein koi data nahi mila.', 'warning');
+      return;
+    }
+    data.tables.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.name; opt.textContent = `${t.name} (${t.count} chunks)`;
+      sel.appendChild(opt);
+    });
+    showAlert('sync-status', `${data.tables.length} table(s) mili jisme embeddings hain.`, 'success');
+  } catch(e) {
+    showAlert('sync-status', e.message, 'error');
+  } finally {
+    $('load-btn').disabled = false;
+    $('load-btn').innerHTML = '🔄 Load Tables';
+  }
+}
+
+async function syncToChroma() {
+  const table = $('table-select').value;
+  if (!table) { showAlert('sync-status', 'Pehle ek table select karo!', 'error'); return; }
+
+  $('sync-btn').disabled = true;
+  $('sync-btn').innerHTML = '<span class="spinner"></span> Syncing...';
+  
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_table: table })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || data.message);
+    
+    showAlert('sync-status', data.message, 'success');
+    $('search-panel').style.display = 'block';
+  } catch(e) {
+    showAlert('sync-status', e.message, 'error');
+  } finally {
+    $('sync-btn').disabled = false;
+    $('sync-btn').innerHTML = '📥 Sync to ChromaDB';
+  }
+}
+
+function handleEnter(e) {
+  if (e.key === 'Enter') performSearch();
+}
+
+async function performSearch() {
+  const table = $('table-select').value;
+  const query = $('query-input').value.trim();
+  
+  if (!query) { showAlert('search-status', 'Query khali nahi ho sakti!', 'error'); return; }
+  
+  $('search-btn').disabled = true;
+  $('search-btn').innerHTML = '<span class="spinner"></span>';
+  $('results-container').innerHTML = '';
+  
+  try {
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_table: table, query: query, top_k: 5 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || data.message);
+    
+    if (data.results.length === 0) {
+      $('results-container').innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Koi relevant chunk nahi mila.</div>';
+      return;
+    }
+
+    window._allChunks = data.results; // Save chunks for modal
+    $('results-container').innerHTML = data.results.map((r, i) => `
+      <div class="result-card" style="animation-delay:${i * 0.05}s; cursor:pointer;" onclick="openChunkModal(${i})">
+        <div class="result-header">
+          <span style="font-size:0.75rem; color:var(--text-muted);">${r.metadata.document_name} | Chunk ${r.metadata.chunk_index}</span>
+          <span class="score-badge">Similarity: ${(r.score * 100).toFixed(1)}%</span>
+        </div>
+        <div class="result-content">${r.content}</div>
+      </div>
+    `).join('');
+    
+    $('search-status').innerHTML = ''; // clear status
+  } catch(e) {
+    showAlert('search-status', e.message, 'error');
+  } finally {
+    $('search-btn').disabled = false;
+    $('search-btn').innerHTML = '🔍 Search';
+  }
+}
+
+// ── Chunk Modal Functions ──────────────────────────────────────────────────
+let _modalCurrentIndex = 0;
+
+function openChunkModal(index) {
+  const chunks = window._allChunks;
+  if (!chunks || !chunks[index]) return;
+  _modalCurrentIndex = index;
+
+  const c = chunks[index];
+  const wordCount = c.content.split(/\s+/).filter(Boolean).length;
+
+  document.getElementById('modal-chunk-id').textContent = `chunk_${String(c.metadata.chunk_index).padStart(3,'0')}`;
+  document.getElementById('modal-word-count').textContent = `${wordCount} words`;
+  document.getElementById('modal-chunk-text').textContent = c.content;
+
+  // Update Prev/Next buttons
+  document.getElementById('modal-prev-btn').disabled = index === 0;
+  document.getElementById('modal-next-btn').disabled = index === chunks.length - 1;
+  document.getElementById('modal-prev-btn').style.opacity = index === 0 ? '0.3' : '1';
+  document.getElementById('modal-next-btn').style.opacity = index === chunks.length - 1 ? '0.3' : '1';
+
+  const modal = document.getElementById('chunk-modal');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeChunkModal(event) {
+  if (event && event.target !== document.getElementById('chunk-modal')) return;
+  document.getElementById('chunk-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function navigateModal(dir) {
+  const chunks = window._allChunks;
+  if (!chunks) return;
+  const newIndex = _modalCurrentIndex + dir;
+  if (newIndex >= 0 && newIndex < chunks.length) {
+    openChunkModal(newIndex);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('chunk-modal');
+  if (!modal || modal.style.display !== 'flex') return;
+  if (e.key === 'Escape') { modal.style.display = 'none'; document.body.style.overflow = ''; }
+  if (e.key === 'ArrowRight') navigateModal(1);
+  if (e.key === 'ArrowLeft')  navigateModal(-1);
+});
+
+window.addEventListener('DOMContentLoaded', () => loadTables());
+</script>
+
+<!-- Chunk Full-Text Modal -->
+<div id="chunk-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); align-items:center; justify-content:center;" onclick="closeChunkModal(event)">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; max-width:700px; width:92%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+    <!-- Modal Header -->
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1.2rem 1.5rem; border-bottom:1px solid var(--border);">
+      <div style="display:flex; align-items:center; gap:0.8rem;">
+        <span id="modal-chunk-id" style="background:rgba(251,146,60,0.15); color:var(--orange); font-family:monospace; font-size:0.85rem; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;"></span>
+        <span id="modal-word-count" style="color:var(--text-muted); font-size:0.8rem;"></span>
+      </div>
+      <button onclick="closeChunkModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; line-height:1; padding:0.2rem 0.5rem; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">&#x2715;</button>
+    </div>
+    <!-- Modal Body -->
+    <div style="padding:1.5rem; overflow-y:auto; flex:1;">
+      <p id="modal-chunk-text" style="line-height:1.8; color:var(--text-primary); font-size:0.92rem; white-space:pre-wrap; margin:0;"></p>
+    </div>
+    <!-- Modal Footer -->
+    <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--text-muted); font-size:0.78rem;">Esc ya bahar click karo band karne ke liye</span>
+      <div style="display:flex; gap:0.6rem;">
+         <button id="modal-prev-btn" onclick="navigateModal(-1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">&#8592; Prev</button>
+         <button id="modal-next-btn" onclick="navigateModal(1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">Next &#8594;</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Step 2 — Embedding Generator | RAG Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #070b14;
+      --surface:   #0d1525;
+      --surface2:  #111c30;
+      --border:    rgba(255,255,255,0.08);
+      --cyan:      #38bdf8;
+      --purple:    #a78bfa;
+      --green:     #34d399;
+      --pink:      #f472b6;
+      --yellow:    #fbbf24;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(ellipse 80% 60% at 10% 0%, rgba(167,139,250,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 90% 100%, rgba(56,189,248,0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(52,211,153,0.05) 0%, transparent 70%);
+    }
+
+    /* NAV */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem;
+      background: rgba(13,21,37,0.8);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 0.7rem; text-decoration: none; }
+    .brand-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      display: grid; place-items: center; font-size: 1.1rem;
+    }
+    .nav-brand span { font-weight: 700; font-size: 0.95rem; color: var(--text-primary); }
+    .step-badge {
+      background: linear-gradient(135deg, rgba(167,139,250,0.2), rgba(56,189,248,0.2));
+      border: 1px solid rgba(167,139,250,0.3);
+      color: var(--purple);
+      padding: 0.3rem 0.9rem; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
+    }
+
+    /* MAIN LAYOUT */
+    .page { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+    /* HEADER */
+    .step-header {
+      display: flex; align-items: center; gap: 1.2rem; margin-bottom: 2rem;
+    }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      display: grid; place-items: center;
+      font-size: 1.5rem; font-weight: 800; flex-shrink: 0;
+    }
+    .step-header h1 { font-size: 1.8rem; font-weight: 800; }
+    .step-header p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem; }
+
+    /* PROGRESS */
+    .progress-wrap { margin-bottom: 2rem; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.4rem; }
+    .progress-bar { height: 4px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 25%; border-radius: 99px; background: linear-gradient(90deg, var(--purple), var(--cyan)); }
+
+    /* PANELS */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .panel-title {
+      font-size: 0.85rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1.2rem;
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+    .dot-purple { background: var(--purple); box-shadow: 0 0 8px var(--purple); }
+    .dot-green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+    /* FORM */
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
+    input, select {
+      width: 100%; padding: 0.65rem 1rem; border-radius: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 0.88rem;
+      outline: none; transition: border 0.2s;
+    }
+    input:focus, select:focus { border-color: var(--purple); }
+
+    /* STATS ROW */
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.2rem; }
+    .stat-card {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1rem; text-align: center;
+    }
+    .stat-value { font-size: 2rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+    .stat-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.2rem; }
+    .cyan  { color: var(--cyan); }
+    .purple{ color: var(--purple); }
+    .green { color: var(--green); }
+    .yellow{ color: var(--yellow); }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.65rem 1.4rem; border-radius: 10px; border: none;
+      font-family: 'Inter', sans-serif; font-size: 0.88rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      color: #fff; box-shadow: 0 4px 20px rgba(167,139,250,0.3);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(167,139,250,0.4); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* PROGRESS BAR FOR EMBEDDING */
+    .embed-progress-wrap { margin: 1rem 0; display: none; }
+    .embed-progress-label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+    .embed-progress-bar { height: 8px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .embed-progress-fill {
+      height: 100%; width: 0%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--purple), var(--green));
+      transition: width 0.4s ease;
+    }
+
+    /* ALERT */
+    .alert { padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.85rem; margin-top: 0.8rem; }
+    .alert-success { background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.25); color: var(--green); }
+    .alert-error   { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.25); color: #f87171; }
+    .alert-info    { background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2);  color: var(--cyan); }
+    .alert-warning { background: rgba(251,191,36,0.1);  border: 1px solid rgba(251,191,36,0.25); color: var(--yellow); }
+
+    .chunks-grid { display: flex; flex-direction: column; gap: 0.75rem; }
+    .chunk-card {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1rem 1.2rem;
+      animation: fadeUp 0.3s ease both;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .chunk-card:hover {
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: none; } }
+    .chunk-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+    .chunk-id {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 600;
+      background: rgba(56,189,248,0.12); color: var(--cyan);
+      padding: 0.2rem 0.6rem; border-radius: 6px;
+    }
+    .chunk-meta { font-size: 0.75rem; color: var(--text-muted); }
+    .chunk-content { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 0.8rem; }
+
+    /* EMBEDDING BAR CHART */
+    .emb-bar-wrap { margin-top: 0.5rem; }
+    .emb-bar-label { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.3rem; font-family: 'JetBrains Mono', monospace; }
+    .emb-bar {
+      display: flex; align-items: flex-end; gap: 2px;
+      height: 36px; background: rgba(0,0,0,0.2);
+      padding: 2px 4px; border-radius: 6px;
+    }
+    .emb-bar-cell {
+      flex: 1; border-radius: 2px 2px 0 0; min-height: 2px;
+      transition: height 0.4s ease;
+    }
+    .bar-pos { background: linear-gradient(180deg, var(--cyan), rgba(56,189,248,0.4)); }
+    .bar-neg { background: linear-gradient(180deg, var(--pink), rgba(244,114,182,0.4)); }
+
+    .model-badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.25);
+      color: var(--purple); padding: 0.3rem 0.8rem; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+    }
+
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Info boxes */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+    .info-box {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1rem; display: flex; gap: 0.8rem; align-items: flex-start;
+    }
+    .info-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .info-box h4 { font-size: 0.82rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.2rem; }
+    .info-box p  { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-brand">
+    <div class="brand-icon">🧠</div>
+    <span>RAG Simulator</span>
+  </a>
+  <span class="step-badge">Step 2 of 8 — Embedding</span>
+</nav>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="step-header">
+    <div class="step-num">2</div>
+    <div>
+      <h1>🔢 Embedding Generator</h1>
+      <p>Text chunks ko 384-dimensional vectors mein convert karo using <strong>all-MiniLM-L6-v2</strong></p>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap">
+    <div class="progress-label"><span>Step 2 of 8</span><span>25%</span></div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+
+  <!-- What is Embedding? -->
+  <div class="info-grid">
+    <div class="info-box">
+      <div class="info-icon">📝</div>
+      <div>
+        <h4>Embedding kya hai?</h4>
+        <p>Text → Numbers ka array. "Dog" aur "Puppy" ke numbers milte-julte honge kyunki meaning similar hai.</p>
+      </div>
+    </div>
+    <div class="info-box">
+      <div class="info-icon">📐</div>
+      <div>
+        <h4>384 Dimensions</h4>
+        <p>Har chunk → 384 numbers ka ek vector. Similar text ke vectors ek doosre ke paas hote hain space mein.</p>
+      </div>
+    </div>
+    <div class="info-box">
+      <div class="info-icon">🤖</div>
+      <div>
+        <h4>Model: all-MiniLM-L6-v2</h4>
+        <p>Free, local model. No API key chahiye. Sentence Transformers library se run hota hai.</p>
+      </div>
+    </div>
+    <div class="info-box">
+      <div class="info-icon">💾</div>
+      <div>
+        <h4>PostgreSQL Storage</h4>
+        <p>Embeddings usi PostgreSQL mein <code>embeddings</code> table mein store honge.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config Panel -->
+  <div class="panel">
+    <div class="panel-title"><span class="dot dot-purple"></span> Configuration</div>
+
+    <div class="form-group">
+      <label>PostgreSQL Connection URI</label>
+      <input type="text" id="db-uri" value="postgresql://postgres:Akshat%402004@localhost:2004/postgres"/>
+    </div>
+
+    <div class="form-group">
+      <label>Chunk Table Select karo (Step 1 mein save ki gayi tables)</label>
+      <select id="table-select">
+        <option value="">-- Pehle Load Tables dabao --</option>
+      </select>
+    </div>
+
+    <div style="display:flex; gap:0.8rem; flex-wrap:wrap; margin-top:1rem;">
+      <button class="btn btn-secondary" id="load-btn" onclick="loadTables()">🔄 Load Tables</button>
+      <button class="btn btn-secondary" id="stats-btn" onclick="loadStats()" style="display:none;">📊 Refresh Stats</button>
+    </div>
+    <div id="config-status"></div>
+  </div>
+
+  <!-- Stats Panel -->
+  <div class="panel" id="stats-panel" style="display:none;">
+    <div class="panel-title"><span class="dot"></span> Embedding Status</div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-value cyan" id="stat-total">0</div><div class="stat-label">Total Chunks</div></div>
+      <div class="stat-card"><div class="stat-value green" id="stat-embedded">0</div><div class="stat-label">Embedded</div></div>
+      <div class="stat-card"><div class="stat-value yellow" id="stat-pending">0</div><div class="stat-label">Pending</div></div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+      <button class="btn btn-primary" id="embed-btn" onclick="generateEmbeddings()">
+        ⚡ Generate Embeddings
+      </button>
+      <span class="model-badge">🤖 all-MiniLM-L6-v2 &nbsp;|&nbsp; 384 dims</span>
+    </div>
+
+    <div class="embed-progress-wrap" id="progress-wrap">
+      <div class="embed-progress-label">
+        <span id="progress-text">Embedding chal raha hai...</span>
+        <span id="progress-pct">0%</span>
+      </div>
+      <div class="embed-progress-bar"><div class="embed-progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <div id="embed-status"></div>
+  </div>
+
+  <!-- Results Panel -->
+  <div class="panel" id="results-panel" style="display:none;">
+    <div class="panel-title"><span class="dot dot-green"></span> Embedded Chunks <small style="font-size:0.72rem;color:var(--text-muted);font-weight:400;">(first 32 dimensions visualized)</small></div>
+    <div class="chunks-grid" id="chunks-grid"></div>
+  </div>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function showAlert(containerId, msg, type='info') {
+  const icons = { success:'✅', error:'❌', info:'ℹ️', warning:'⚠️' };
+  $(containerId).innerHTML = `<div class="alert alert-${type}">${icons[type]} ${msg}</div>`;
+}
+
+async function loadTables() {
+  const uri = $('db-uri').value.trim();
+  $('load-btn').disabled = true;
+  $('load-btn').innerHTML = '<span class="spinner"></span> Loading...';
+  try {
+    const res = await fetch('/api/tables?' + new URLSearchParams({ connection_uri: uri }));
+    const data = await res.json();
+    const sel = $('table-select');
+    sel.innerHTML = '<option value="">-- Table chunao --</option>';
+    if (!data.tables || data.tables.length === 0) {
+      showAlert('config-status', 'Koi chunk table nahi mili. Pehle Step 1 se chunks save karo!', 'warning');
+      return;
+    }
+    data.tables.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.name; opt.textContent = t.name;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', () => { if (sel.value) loadStats(); });
+    showAlert('config-status', `${data.tables.length} chunk table(s) mili!`, 'success');
+    $('stats-btn').style.display = 'inline-flex';
+  } catch(e) {
+    showAlert('config-status', e.message, 'error');
+  } finally {
+    $('load-btn').disabled = false;
+    $('load-btn').innerHTML = '🔄 Load Tables';
+  }
+}
+
+async function loadStats() {
+  const uri   = $('db-uri').value.trim();
+  const table = $('table-select').value;
+  if (!table) { showAlert('config-status', 'Pehle ek table select karo!', 'warning'); return; }
+
+  try {
+    const res = await fetch('/api/stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_table: table, connection_uri: uri })
+    });
+    const data = await res.json();
+    $('stat-total').textContent    = data.total;
+    $('stat-embedded').textContent = data.embedded;
+    $('stat-pending').textContent  = data.pending;
+    $('stats-panel').style.display = 'block';
+
+    if (data.embedded > 0) loadPreview();
+  } catch(e) {
+    showAlert('config-status', e.message, 'error');
+  }
+}
+
+async function generateEmbeddings() {
+  const uri   = $('db-uri').value.trim();
+  const table = $('table-select').value;
+  if (!table) { showAlert('embed-status', 'Table select karo!', 'warning'); return; }
+
+  const pending = parseInt($('stat-pending').textContent);
+  if (pending === 0) { showAlert('embed-status', 'Sab chunks pehle se embed hain! Preview dekho.', 'info'); loadPreview(); return; }
+
+  $('embed-btn').disabled = true;
+  $('embed-btn').innerHTML = '<span class="spinner"></span> Embedding chal raha hai...';
+  $('progress-wrap').style.display = 'block';
+
+  // Animate progress bar (indeterminate style)
+  let pct = 0;
+  const interval = setInterval(() => {
+    pct = Math.min(pct + (100 - pct) * 0.04, 92);
+    $('progress-fill').style.width = pct + '%';
+    $('progress-pct').textContent  = Math.round(pct) + '%';
+  }, 300);
+
+  try {
+    const res = await fetch('/api/embed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_table: table, connection_uri: uri, batch_size: 32 })
+    });
+    const data = await res.json();
+
+    clearInterval(interval);
+    $('progress-fill').style.width = '100%';
+    $('progress-pct').textContent  = '100%';
+    $('progress-text').textContent = 'Complete!';
+
+    showAlert('embed-status', data.message, 'success');
+    await loadStats();
+    await loadPreview();
+  } catch(e) {
+    clearInterval(interval);
+    showAlert('embed-status', e.message, 'error');
+  } finally {
+    $('embed-btn').disabled = false;
+    $('embed-btn').innerHTML = '⚡ Generate Embeddings';
+  }
+}
+
+async function loadPreview() {
+  const uri   = $('db-uri').value.trim();
+  const table = $('table-select').value;
+  if (!table) return;
+
+  try {
+    const res = await fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_table: table, connection_uri: uri, limit: 50 })
+    });
+    const data = await res.json();
+
+    if (!data.rows || data.rows.length === 0) return;
+
+    const grid = $('chunks-grid');
+    window._allChunks = data.rows; 
+    grid.innerHTML = data.rows.map((r, i) => {
+      const bars = r.embedding_preview.map(v => {
+        const max = Math.max(...r.embedding_preview.map(Math.abs)) || 1;
+        const h   = Math.max(Math.round((Math.abs(v) / max) * 100), 4);
+        const cls = v >= 0 ? 'bar-pos' : 'bar-neg';
+        return `<div class="emb-bar-cell ${cls}" style="height:${h}%" title="${v.toFixed(4)}"></div>`;
+      }).join('');
+
+      return `
+      <div class="chunk-card" style="animation-delay:${i * 0.04}s; cursor:pointer;" onclick="openChunkModal(${i})">
+        <div class="chunk-card-header">
+          <span class="chunk-id">chunk_${String(r.chunk_index).padStart(3,'0')}</span>
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <span style="font-size:0.7rem;background:rgba(52,211,153,0.12);color:#34d399;padding:0.15rem 0.5rem;border-radius:20px;">✓ embedded</span>
+            <span class="chunk-meta">${r.dimensions} dims</span>
+          </div>
+        </div>
+        <div class="chunk-content">${r.content_preview}...</div>
+        <div class="emb-bar-wrap">
+          <div class="emb-bar-label">First 32 dimensions (cyan=positive, pink=negative)</div>
+          <div class="emb-bar">${bars}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    $('results-panel').style.display = 'block';
+  } catch(e) {
+    console.error('Preview error:', e);
+  }
+}
+
+// ── Chunk Modal Functions ──────────────────────────────────────────────────
+let _modalCurrentIndex = 0;
+
+function openChunkModal(index) {
+  const chunks = window._allChunks;
+  if (!chunks || !chunks[index]) return;
+  _modalCurrentIndex = index;
+
+  const c = chunks[index];
+  const wordCount = c.content.split(/\s+/).filter(Boolean).length;
+
+  document.getElementById('modal-chunk-id').textContent = `chunk_${String(c.chunk_index).padStart(3,'0')}`;
+  document.getElementById('modal-word-count').textContent = `${wordCount} words`;
+  document.getElementById('modal-chunk-text').textContent = c.content;
+
+  // Update Prev/Next buttons
+  document.getElementById('modal-prev-btn').disabled = index === 0;
+  document.getElementById('modal-next-btn').disabled = index === chunks.length - 1;
+  document.getElementById('modal-prev-btn').style.opacity = index === 0 ? '0.3' : '1';
+  document.getElementById('modal-next-btn').style.opacity = index === chunks.length - 1 ? '0.3' : '1';
+
+  const modal = document.getElementById('chunk-modal');
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeChunkModal(event) {
+  if (event && event.target !== document.getElementById('chunk-modal')) return;
+  document.getElementById('chunk-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function navigateModal(dir) {
+  const chunks = window._allChunks;
+  if (!chunks) return;
+  const newIndex = _modalCurrentIndex + dir;
+  if (newIndex >= 0 && newIndex < chunks.length) {
+    openChunkModal(newIndex);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('chunk-modal');
+  if (!modal || modal.style.display !== 'flex') return;
+  if (e.key === 'Escape') { modal.style.display = 'none'; document.body.style.overflow = ''; }
+  if (e.key === 'ArrowRight') navigateModal(1);
+  if (e.key === 'ArrowLeft')  navigateModal(-1);
+});
+
+// Auto-load tables on page load
+window.addEventListener('DOMContentLoaded', () => loadTables());
+</script>
+
+<!-- Chunk Full-Text Modal -->
+<div id="chunk-modal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); backdrop-filter:blur(6px); align-items:center; justify-content:center;" onclick="closeChunkModal(event)">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; max-width:700px; width:92%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.5);">
+    <!-- Modal Header -->
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:1.2rem 1.5rem; border-bottom:1px solid var(--border);">
+      <div style="display:flex; align-items:center; gap:0.8rem;">
+        <span id="modal-chunk-id" style="background:rgba(56,189,248,0.15); color:var(--cyan); font-family:monospace; font-size:0.85rem; padding:0.3rem 0.7rem; border-radius:6px; font-weight:700;"></span>
+        <span id="modal-word-count" style="color:var(--text-muted); font-size:0.8rem;"></span>
+      </div>
+      <button onclick="closeChunkModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; line-height:1; padding:0.2rem 0.5rem; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='none'">&#x2715;</button>
+    </div>
+    <!-- Modal Body -->
+    <div style="padding:1.5rem; overflow-y:auto; flex:1;">
+      <p id="modal-chunk-text" style="line-height:1.8; color:var(--text-primary); font-size:0.92rem; white-space:pre-wrap; margin:0;"></p>
+    </div>
+    <!-- Modal Footer -->
+    <div style="padding:1rem 1.5rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <span style="color:var(--text-muted); font-size:0.78rem;">Esc ya bahar click karo band karne ke liye</span>
+      <div style="display:flex; gap:0.6rem;">
+        <button id="modal-prev-btn" onclick="navigateModal(-1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">&#8592; Prev</button>
+        <button id="modal-next-btn" onclick="navigateModal(1)" style="background:rgba(255,255,255,0.07); border:1px solid var(--border); color:var(--text-primary); padding:0.4rem 1rem; border-radius:8px; cursor:pointer; font-size:0.82rem;">Next &#8594;</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
