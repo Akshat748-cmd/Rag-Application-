@@ -12,6 +12,12 @@ import time
 router = APIRouter(prefix="/api", tags=["chunking"])
 
 
+import os
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
 class ChunkRequest(BaseModel):
     text: str
     strategy: str = "fixed"       # fixed | recursive | sentence
@@ -21,23 +27,12 @@ class ChunkRequest(BaseModel):
 
 
 class PostgresTestRequest(BaseModel):
-    connection_uri: Optional[str] = ""
-    host: Optional[str] = "localhost"
-    port: Optional[int] = 2004
-    database: Optional[str] = "postgres"
-    user: Optional[str] = "postgres"
-    password: Optional[str] = "postgres"
+    pass
 
 
 class PostgresStoreRequest(BaseModel):
     chunks: List[Dict]
     table_name: str = "document_chunks"
-    connection_uri: Optional[str] = ""
-    host: Optional[str] = "localhost"
-    port: Optional[int] = 2004
-    database: Optional[str] = "postgres"
-    user: Optional[str] = "postgres"
-    password: Optional[str] = "postgres"
     document_name: Optional[str] = "unknown"
 
 
@@ -81,14 +76,12 @@ async def chunk_document(req: ChunkRequest):
 
 @router.post("/chunk/test-db")
 async def test_postgres(req: PostgresTestRequest):
-    """Test connection to PostgreSQL database."""
+    """Test connection to PostgreSQL database using DATABASE_URL from .env."""
+    if not DATABASE_URL:
+        raise HTTPException(status_code=500, detail="DATABASE_URL not set in backend .env")
+        
     success, msg = test_db_connection(
-        connection_uri=req.connection_uri,
-        host=req.host,
-        port=req.port,
-        database=req.database,
-        user=req.user,
-        password=req.password
+        connection_uri=DATABASE_URL
     )
     if not success:
         raise HTTPException(status_code=400, detail=msg)
@@ -97,19 +90,17 @@ async def test_postgres(req: PostgresTestRequest):
 
 @router.post("/chunk/store-db")
 async def store_postgres(req: PostgresStoreRequest):
-    """Store generated chunks into PostgreSQL database."""
+    """Store generated chunks into PostgreSQL database using DATABASE_URL from .env."""
+    if not DATABASE_URL:
+        raise HTTPException(status_code=500, detail="DATABASE_URL not set in backend .env")
+        
     if not req.chunks:
         raise HTTPException(status_code=400, detail="No chunks provided to store")
 
     success, msg, count = store_chunks_in_postgres(
         chunks=req.chunks,
         table_name=req.table_name,
-        connection_uri=req.connection_uri,
-        host=req.host,
-        port=req.port,
-        database=req.database,
-        user=req.user,
-        password=req.password,
+        connection_uri=DATABASE_URL,
         document_name=req.document_name or "unknown"
     )
     if not success:
@@ -119,18 +110,15 @@ async def store_postgres(req: PostgresStoreRequest):
 
 class PostgresViewRequest(BaseModel):
     table_name: str = "document_chunks"
-    connection_uri: Optional[str] = ""
-    host: Optional[str] = "localhost"
-    port: Optional[int] = 2004
-    database: Optional[str] = "postgres"
-    user: Optional[str] = "postgres"
-    password: Optional[str] = "postgres"
     limit: Optional[int] = 100
 
 
 @router.post("/chunk/view-db")
 async def view_postgres_table(req: PostgresViewRequest):
-    """Fetch saved chunks from PostgreSQL table for display."""
+    """Fetch saved chunks from PostgreSQL table for display using DATABASE_URL from .env."""
+    if not DATABASE_URL:
+        raise HTTPException(status_code=500, detail="DATABASE_URL not set in backend .env")
+        
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
@@ -140,14 +128,7 @@ async def view_postgres_table(req: PostgresViewRequest):
 
     conn = None
     try:
-        if req.connection_uri and req.connection_uri.strip():
-            conn = psycopg2.connect(req.connection_uri)
-        else:
-            conn = psycopg2.connect(
-                host=req.host, port=req.port, database=req.database,
-                user=req.user, password=req.password
-            )
-
+        conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
         # Check table exists

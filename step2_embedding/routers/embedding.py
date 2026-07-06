@@ -7,7 +7,11 @@ from core.embedder import (
 
 router = APIRouter(prefix="/api", tags=["embedding"])
 
-DB_URI = "postgresql://postgres:Akshat%402004@localhost:2004/postgres"
+import os
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
+DB_URI = os.environ.get("DATABASE_URL", "postgresql://postgres:Akshat%402004@localhost:2004/postgres")
 
 
 class EmbedRequest(BaseModel):

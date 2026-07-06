@@ -35,3 +35,6 @@ instance/
 .coverage
 htmlcov/
 
+# ChromaDB local data
+step3_vectordb/chroma_data/
+

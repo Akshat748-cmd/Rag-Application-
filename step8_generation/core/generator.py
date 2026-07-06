@@ -1,51 +1,30 @@
-"""
-Step 8 — LLM Generation App Core
-Retrieves chunks, re-ranks them, builds the prompt, and queries Gemini LLM.
-"""
 import os
-import json
-import chromadb
-from sentence_transformers import SentenceTransformer
-from typing import List, Optional
-import google.generativeai as genai
-import re
+import sys
 import time
+from typing import List, Optional
+from dotenv import load_dotenv, find_dotenv
 
-# API Key Config
-GEMINI_API_KEY = "AIzaSyB5kLSjusUygSwxUB9vVheyh5VXogQUs1U"
-_MODEL_NAME = "all-MiniLM-L6-v2"
-_embed_model = None
+# Add project root to sys.path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-CHROMA_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-    "step3_vectordb", 
-    "chroma_data"
+from shared.rag_core import (
+    chroma_client,
+    retrieve_chunks,
+    rerank_chunks,
+    build_prompt,
+    call_gemini
 )
-chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 
-def get_embed_model():
-    global _embed_model
-    if _embed_model is None:
-        _embed_model = SentenceTransformer(_MODEL_NAME)
-    return _embed_model
-
-def embed_query(query: str) -> list:
-    return get_embed_model().encode(query, show_progress_bar=False, convert_to_numpy=True).tolist()
-
-def clean_and_tokenize(text: str) -> List[str]:
-    words = re.findall(r'\b\w+\b', text.lower())
-    stopwords = {"is", "a", "the", "in", "of", "to", "for", "and", "about", "what", "with", "this", "or", "an", "on", "at", "by", "from"}
-    return [w for w in words if w not in stopwords]
-
-def calculate_keyword_score(query: str, chunk_content: str) -> float:
-    query_tokens = set(clean_and_tokenize(query))
-    if not query_tokens:
-        return 0.0
-    chunk_tokens = set(clean_and_tokenize(chunk_content))
-    matches = query_tokens.intersection(chunk_tokens)
-    return len(matches) / len(query_tokens)
+load_dotenv(find_dotenv())
+USE_CROSS_ENCODER = os.environ.get("USE_CROSS_ENCODER", "false").lower() == "true"
 
 def generate_rag_response(source_table: str, query: str, top_k: int = 3) -> dict:
+    """
+    Step 8 — LLM Generation App Core.
+    Retrieves, reranks (simulated hybrid or true cross-encoder), and generates response.
+    """
     t0 = time.perf_counter()
     collection_name = source_table.replace("_", "-")[:63]
     try:
@@ -56,69 +35,23 @@ def generate_rag_response(source_table: str, query: str, top_k: int = 3) -> dict
             "message": f"Chroma collection '{collection_name}' not found. Sync in Step 3 first."
         }
 
-    # 1. Retrieve pool of chunks
+    # 1. Retrieve initial pool of chunks
     retrieve_count = min(top_k * 2, collection.count())
     if retrieve_count == 0:
         return {"success": False, "message": "No chunks found in database."}
 
-    query_embedding = embed_query(query)
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=retrieve_count
-    )
-
-    initial_chunks = []
-    if results['ids'] and results['ids'][0]:
-        for i in range(len(results['ids'][0])):
-            distance = results['distances'][0][i]
-            if distance > 1.001:
-                score = 1.0 - (distance / 2.0)
-            else:
-                score = 1.0 - distance
-            score = max(0.0, min(1.0, score))
-
-            initial_chunks.append({
-                "id": results['ids'][0][i],
-                "semantic_score": round(score, 4),
-                "content": results['documents'][0][i],
-                "metadata": results['metadatas'][0][i]
-            })
-
-    # 2. Re-rank (60% semantic + 40% keyword overlap)
-    reranked_chunks = []
-    for chunk in initial_chunks:
-        keyword_score = calculate_keyword_score(query, chunk["content"])
-        hybrid_score = (chunk["semantic_score"] * 0.6) + (keyword_score * 0.4)
-        reranked_chunks.append({
-            **chunk,
-            "final_score": round(hybrid_score, 4)
-        })
-
-    reranked_chunks.sort(key=lambda x: x["final_score"], reverse=True)
-    top_chunks = reranked_chunks[:top_k]
+    initial_chunks = retrieve_chunks(source_table, query, retrieve_count)
+    
+    # 2. Re-rank (hybrid dense+sparse or true cross-encoder)
+    top_chunks = rerank_chunks(query, initial_chunks, top_k, use_cross_encoder=USE_CROSS_ENCODER)
 
     # 3. Assemble Prompt
     context_texts = [c["content"] for c in top_chunks]
     context = "\n\n---\n\n".join(context_texts)
-    
-    prompt = f"""You are a helpful AI assistant. Answer the user's question based ONLY on the provided context. If you cannot answer based on the context, say "I cannot find the answer in the provided documents."
-
-Context:
-{context}
-
-Question:
-{query}
-
-Answer:"""
+    prompt = build_prompt(context, query)
 
     # 4. LLM Generation
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
-        answer = response.text
-    except Exception as e:
-        answer = f"[Error using Gemini API: {str(e)}]\n\nPrompt was:\n{prompt}"
+    answer = call_gemini(prompt)
 
     elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
 

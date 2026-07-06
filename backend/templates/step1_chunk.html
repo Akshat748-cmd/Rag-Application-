@@ -129,7 +129,7 @@
 
     <div class="form-group" style="margin-bottom:1rem;">
       <label for="pg-uri">PostgreSQL Connection URI</label>
-      <input type="text" id="pg-uri" value="postgresql://postgres:Akshat%402004@localhost:2004/postgres" placeholder="postgresql://user:pass@host:port/db"/>
+      <input type="text" id="pg-uri" value="Loaded from backend .env" disabled style="opacity: 0.7; cursor: not-allowed; font-weight: 600; color: var(--text-secondary);"/>
     </div>
 
     <div class="form-group" style="margin-bottom:1rem;">
@@ -244,15 +244,13 @@ zone.addEventListener('drop', async e => {
 });
 
 async function testPostgresConnection() {
-  const uri = document.getElementById('pg-uri').value.trim();
-  if (!uri) { showAlert('pg-status', '⚠️ Connection URI daalo pehle!', 'warning'); return; }
   setLoading('pg-test-btn', true, '🔌 Test Connection');
   showAlert('pg-status', 'Testing database connection...', 'info');
   try {
     const res = await fetch('/api/chunk/test-db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ connection_uri: uri })
+      body: JSON.stringify({})
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Connection failed');
@@ -268,12 +266,6 @@ async function storePostgresChunks() {
   const chunks = PipelineState.get('chunks');
   if (!chunks || chunks.length === 0) {
     showAlert('pg-status', '⚠️ Pehle chunks banao! (upar "Create Chunks" button dabao)', 'warning');
-    return;
-  }
-
-  const uri = document.getElementById('pg-uri').value.trim();
-  if (!uri) {
-    showAlert('pg-status', '⚠️ Connection URI daalo!', 'warning');
     return;
   }
 
@@ -305,8 +297,7 @@ async function storePostgresChunks() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chunks: payloadChunks,
-        table_name: tableName,
-        connection_uri: uri
+        table_name: tableName
       })
     });
     const data = await res.json();
@@ -332,7 +323,6 @@ async function storePostgresChunks() {
 }
 
 async function viewSavedData(tableNameOverride) {
-  const uri = document.getElementById('pg-uri').value.trim();
   const tableName = tableNameOverride || document.getElementById('pg-view-btn').dataset.table || document.getElementById('pg-table').value;
   if (!tableName) {
     showAlert('pg-status', '⚠️ Pehle chunks save karo!', 'warning');
@@ -346,7 +336,7 @@ async function viewSavedData(tableNameOverride) {
     const res = await fetch('/api/chunk/view-db', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ table_name: tableName, connection_uri: uri, limit: 50 })
+      body: JSON.stringify({ table_name: tableName, limit: 50 })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Failed to fetch data');

@@ -72,7 +72,10 @@ def sync_to_chroma(uri: str, source_table: str) -> dict:
 
     # Connect to ChromaDB Collection
     collection_name = source_table.replace("_", "-")[:63] # ChromaDB naming rules
-    collection = chroma_client.get_or_create_collection(name=collection_name)
+    collection = chroma_client.get_or_create_collection(
+        name=collection_name, 
+        metadata={"hnsw:space": "cosine"}
+    )
 
     # Prepare data for ChromaDB
     ids = []
@@ -125,9 +128,12 @@ def search_chroma(source_table: str, query: str, top_k: int = 5) -> dict:
     formatted_results = []
     if results['ids'] and results['ids'][0]:
         for i in range(len(results['ids'][0])):
+            distance = results['distances'][0][i]
+            score = 1.0 - distance
+            score = max(0.0, min(1.0, score))
             formatted_results.append({
                 "id": results['ids'][0][i],
-                "score": round(1.0 - results['distances'][0][i], 4), # Convert distance to similarity score
+                "score": round(score, 4),
                 "content": results['documents'][0][i],
                 "metadata": results['metadatas'][0][i]
             })

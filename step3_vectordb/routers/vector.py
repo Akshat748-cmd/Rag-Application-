@@ -5,7 +5,11 @@ from core.vectordb import get_embedded_tables, sync_to_chroma, search_chroma
 
 router = APIRouter(prefix="/api", tags=["vector"])
 
-DB_URI = "postgresql://postgres:Akshat%402004@localhost:2004/postgres"
+import os
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
+DB_URI = os.environ.get("DATABASE_URL", "postgresql://postgres:Akshat%402004@localhost:2004/postgres")
 
 class SyncRequest(BaseModel):
     source_table: str

@@ -53,11 +53,7 @@ def retrieve_similar_chunks(source_table: str, query: str, top_k: int = 5) -> di
     if results['ids'] and results['ids'][0]:
         for i in range(len(results['ids'][0])):
             distance = results['distances'][0][i]
-            # Distance scoring mapping
-            if distance > 1.001:
-                score = 1.0 - (distance / 2.0)
-            else:
-                score = 1.0 - distance
+            score = 1.0 - distance
             score = max(0.0, min(1.0, score))
 
             formatted_results.append({

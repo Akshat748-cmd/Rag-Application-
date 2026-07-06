@@ -1,53 +1,29 @@
 """
 Step 7 — Chunks Re-ranker App Core
-Simulates a Cross-Encoder by re-scoring retrieved chunks using a hybrid
-dense (semantic similarity) + sparse (keyword relevance) scoring system.
+
+Note: This is a simulated hybrid reranker (dense semantic similarity + sparse keyword relevance scoring)
+by default. It is not a true cross-encoder model unless USE_CROSS_ENCODER is set to true in the configurations.
+If USE_CROSS_ENCODER=true, it uses sentence-transformers' CrossEncoder with 'cross-encoder/ms-marco-MiniLM-L-6-v2'.
 """
 import os
-import chromadb
-from sentence_transformers import SentenceTransformer
-from typing import List, Optional
+import sys
 import time
-import re
+from typing import List, Optional
+from dotenv import load_dotenv, find_dotenv
 
-_MODEL_NAME = "all-MiniLM-L6-v2"
-_embed_model = None
+# Add project root to sys.path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-CHROMA_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-    "step3_vectordb", 
-    "chroma_data"
+from shared.rag_core import (
+    chroma_client,
+    retrieve_chunks,
+    rerank_chunks
 )
-chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 
-def get_embed_model():
-    global _embed_model
-    if _embed_model is None:
-        _embed_model = SentenceTransformer(_MODEL_NAME)
-    return _embed_model
-
-def embed_query(query: str) -> list:
-    return get_embed_model().encode(query, show_progress_bar=False, convert_to_numpy=True).tolist()
-
-def clean_and_tokenize(text: str) -> List[str]:
-    """Lowercase, remove punctuation, and split into words."""
-    words = re.findall(r'\b\w+\b', text.lower())
-    # Stopwords list
-    stopwords = {
-        "is", "a", "the", "in", "of", "to", "for", "and", "about", 
-        "what", "with", "this", "or", "an", "on", "at", "by", "from"
-    }
-    return [w for w in words if w not in stopwords]
-
-def calculate_keyword_score(query: str, chunk_content: str) -> float:
-    """Calculate the overlap ratio of query terms in chunk content."""
-    query_tokens = set(clean_and_tokenize(query))
-    if not query_tokens:
-        return 0.0
-    
-    chunk_tokens = set(clean_and_tokenize(chunk_content))
-    matches = query_tokens.intersection(chunk_tokens)
-    return len(matches) / len(query_tokens)
+load_dotenv(find_dotenv())
+USE_CROSS_ENCODER = os.environ.get("USE_CROSS_ENCODER", "false").lower() == "true"
 
 def retrieve_and_rerank(source_table: str, query: str, top_k: int = 5) -> dict:
     t0 = time.perf_counter()
@@ -60,58 +36,33 @@ def retrieve_and_rerank(source_table: str, query: str, top_k: int = 5) -> dict:
             "message": f"Chroma collection '{collection_name}' not found. Please sync in Step 3 first."
         }
 
-    # 1. Retrieve more chunks initially (e.g., top_k * 2) so we have pool to re-rank
+    # 1. Retrieve more chunks initially (e.g., top_k * 2) so we have a pool to re-rank
     retrieve_count = min(top_k * 2, collection.count())
     if retrieve_count == 0:
         return {"success": True, "results": [], "elapsed_ms": 0}
 
-    query_embedding = embed_query(query)
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=retrieve_count
-    )
-
-    initial_chunks = []
-    if results['ids'] and results['ids'][0]:
-        for i in range(len(results['ids'][0])):
-            distance = results['distances'][0][i]
-            if distance > 1.001:
-                score = 1.0 - (distance / 2.0)
-            else:
-                score = 1.0 - distance
-            score = max(0.0, min(1.0, score))
-
-            initial_chunks.append({
-                "id": results['ids'][0][i],
-                "semantic_score": round(score, 4),
-                "content": results['documents'][0][i],
-                "metadata": results['metadatas'][0][i]
-            })
-
-    # 2. Re-rank using a hybrid scorer (60% semantic + 40% keyword overlap)
-    reranked_chunks = []
+    # 2. Retrieve initial chunks using shared module
+    initial_chunks = retrieve_chunks(source_table, query, retrieve_count)
+    
+    # Add original_rank and semantic_score metadata before reranking
     for idx, chunk in enumerate(initial_chunks):
-        keyword_score = calculate_keyword_score(query, chunk["content"])
-        
-        # Combined score calculation
-        hybrid_score = (chunk["semantic_score"] * 0.6) + (keyword_score * 0.4)
-        
-        reranked_chunks.append({
-            **chunk,
-            "original_rank": idx + 1,
-            "keyword_score": round(keyword_score, 4),
-            "final_score": round(hybrid_score, 4)
-        })
+        chunk["original_rank"] = idx + 1
+        chunk["semantic_score"] = chunk["score"]
 
-    # Sort descending by final score
-    reranked_chunks.sort(key=lambda x: x["final_score"], reverse=True)
+    # 3. Re-rank using shared module (supports simulated hybrid and real cross-encoder)
+    reranked = rerank_chunks(query, initial_chunks, top_k, use_cross_encoder=USE_CROSS_ENCODER)
 
-    # Assign new rank and truncate to top_k
+    # 4. Assign new rank and calculate rank change (shift)
     final_results = []
-    for rank_idx, chunk in enumerate(reranked_chunks[:top_k]):
+    for rank_idx, chunk in enumerate(reranked):
         rank_change = chunk["original_rank"] - (rank_idx + 1)
+        
+        # If cross-encoder was used, keyword_score won't be calculated, set it to 0.0 for frontend compatibility
+        keyword_score = chunk.get("keyword_score", 0.0)
+        
         final_results.append({
             **chunk,
+            "keyword_score": keyword_score,
             "new_rank": rank_idx + 1,
             "rank_change": rank_change  # > 0 means moved up, < 0 means moved down, 0 means same
         })

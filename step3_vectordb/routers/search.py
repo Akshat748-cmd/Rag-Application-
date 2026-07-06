@@ -5,7 +5,11 @@ from core.searcher import get_embedded_tables, search_similar_chunks
 
 router = APIRouter(prefix="/api", tags=["search"])
 
-DB_URI = "postgresql://postgres:Akshat%402004@localhost:2004/postgres"
+import os
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(find_dotenv())
+DB_URI = os.environ.get("DATABASE_URL", "postgresql://postgres:Akshat%402004@localhost:2004/postgres")
 
 class SearchRequest(BaseModel):
     query: str
