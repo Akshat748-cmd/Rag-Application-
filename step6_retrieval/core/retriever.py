@@ -1,37 +1,42 @@
 """
 Step 6 — Chunks Retrieval App Core
 Uses ChromaDB to retrieve the most similar text chunks based on query vector.
+
+Now supports hybrid BM25 + vector retrieval when USE_HYBRID_SEARCH=true in .env.
 """
 import os
-import chromadb
-from sentence_transformers import SentenceTransformer
-from typing import List, Optional
+import sys
 import time
+from typing import List
+from dotenv import load_dotenv, find_dotenv
 
-_MODEL_NAME = "all-MiniLM-L6-v2"
-_embed_model = None
+# Add project root to sys.path so shared module is importable
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-# Point to ChromaDB directory in Step 3
-CHROMA_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-    "step3_vectordb", 
-    "chroma_data"
+from shared.rag_core import (
+    chroma_client,
+    retrieve_chunks,
+    rewrite_query,
+    USE_HYBRID_SEARCH,
+    HAS_BM25
 )
-chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 
-def get_embed_model():
-    global _embed_model
-    if _embed_model is None:
-        print(f"[Retriever-Step6] Loading model: {_MODEL_NAME} ...")
-        _embed_model = SentenceTransformer(_MODEL_NAME)
-        print("[Retriever-Step6] Model loaded!")
-    return _embed_model
+load_dotenv(find_dotenv())
 
-def embed_query(query: str) -> list:
-    return get_embed_model().encode(query, show_progress_bar=False, convert_to_numpy=True).tolist()
 
 def retrieve_similar_chunks(source_table: str, query: str, top_k: int = 5) -> dict:
+    """Retrieve top-K similar chunks for the given query.
+
+    Honours USE_HYBRID_SEARCH and USE_QUERY_REWRITING env flags automatically
+    by delegating to shared.rag_core which handles the dispatch.
+    """
     t0 = time.perf_counter()
+
+    # Optional query rewriting — returns original query if flag is off or Gemini unavailable
+    expanded_query = rewrite_query(query)
+
     collection_name = source_table.replace("_", "-")[:63]
     try:
         collection = chroma_client.get_collection(name=collection_name)
@@ -41,33 +46,20 @@ def retrieve_similar_chunks(source_table: str, query: str, top_k: int = 5) -> di
             "message": f"Chroma collection '{collection_name}' not found. Please sync in Step 3 first."
         }
 
-    query_embedding = embed_query(query)
-
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=top_k
-    )
+    # Dispatch to hybrid or pure-vector depending on flag (handled inside retrieve_chunks)
+    results = retrieve_chunks(source_table, expanded_query, top_k)
     elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
 
-    formatted_results = []
-    if results['ids'] and results['ids'][0]:
-        for i in range(len(results['ids'][0])):
-            distance = results['distances'][0][i]
-            score = 1.0 - distance
-            score = max(0.0, min(1.0, score))
-
-            formatted_results.append({
-                "id": results['ids'][0][i],
-                "score": round(score, 4),
-                "content": results['documents'][0][i],
-                "metadata": results['metadatas'][0][i]
-            })
+    hybrid_used = USE_HYBRID_SEARCH and HAS_BM25
 
     return {
         "success": True,
         "query": query,
+        "expanded_query": expanded_query,
+        "query_rewritten": expanded_query != query,
         "collection": collection_name,
         "top_k": top_k,
         "elapsed_ms": elapsed_ms,
-        "results": formatted_results
+        "hybrid_search_used": hybrid_used,
+        "results": results
     }

@@ -257,6 +257,13 @@
   <!-- Results Section -->
   <div class="results-container" id="results-panel">
     
+    <!-- Query Expansion Banner (shown only when query was rewritten) -->
+    <div id="query-expansion-banner" style="display:none; background: rgba(56,189,248,0.07); border: 1px solid rgba(56,189,248,0.3); border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.82rem;">
+      <div style="color: var(--cyan); font-weight: 700; margin-bottom: 0.35rem;">🔍 Query Expansion Active</div>
+      <div style="color: var(--text-secondary); margin-bottom: 0.2rem;"><span style="color:var(--text-muted);">Original:</span> <span id="banner-original-query" style="font-family: 'JetBrains Mono', monospace;"></span></div>
+      <div style="color: var(--text-secondary);"><span style="color:var(--text-muted);">Expanded:</span> <span id="banner-expanded-query" style="font-family: 'JetBrains Mono', monospace; color: var(--cyan);"></span></div>
+    </div>
+
     <!-- AI Output Card -->
     <div class="panel">
       <div class="panel-title"><span class="dot"></span> Final AI Generated Response</div>
@@ -357,6 +364,15 @@
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.message || "Generation failed.");
+
+      // Show query expansion banner if query was rewritten
+      if (data.query_rewritten && data.expanded_query) {
+        $('banner-original-query').textContent = data.query;
+        $('banner-expanded-query').textContent = data.expanded_query;
+        $('query-expansion-banner').style.display = 'block';
+      } else {
+        $('query-expansion-banner').style.display = 'none';
+      }
 
       // Render response details
       $('answer-content').textContent = data.answer;

@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "query": "What is retrieval-augmented generation?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["retrieval", "generation", "context", "language model", "documents"]
+  },
+  {
+    "id": 2,
+    "query": "How does vector similarity search work?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["vector", "embedding", "cosine", "similarity", "distance"]
+  },
+  {
+    "id": 3,
+    "query": "What is the difference between BM25 and dense retrieval?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["BM25", "keyword", "dense", "embedding", "sparse"]
+  },
+  {
+    "id": 4,
+    "query": "What is a cross-encoder and how is it used for reranking?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["cross-encoder", "rerank", "score", "query", "passage"]
+  },
+  {
+    "id": 5,
+    "query": "What is chunking in NLP and why is it important?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["chunk", "text", "split", "context", "retrieval"]
+  },
+  {
+    "id": 6,
+    "query": "How does semantic chunking differ from fixed-size chunking?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["semantic", "similarity", "sentence", "fixed", "boundary"]
+  },
+  {
+    "id": 7,
+    "query": "What is ChromaDB used for in a RAG pipeline?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["chromadb", "vector", "store", "embedding", "retrieval"]
+  },
+  {
+    "id": 8,
+    "query": "What is sentence-transformers and how is it used?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["sentence", "transformer", "embedding", "model", "encode"]
+  },
+  {
+    "id": 9,
+    "query": "What is the role of the Gemini API in this project?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["gemini", "generation", "answer", "LLM", "context"]
+  },
+  {
+    "id": 10,
+    "query": "How does query rewriting improve RAG quality?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["query", "rewrite", "expand", "retrieval", "recall"]
+  },
+  {
+    "id": 11,
+    "query": "What is Precision@K in information retrieval?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["precision", "relevant", "retrieved", "top-k", "fraction"]
+  },
+  {
+    "id": 12,
+    "query": "What is Mean Reciprocal Rank (MRR)?",
+    "expected_chunk_ids": [],
+    "expected_answer_keywords": ["reciprocal", "rank", "first", "relevant", "mean"]
+  }
+]

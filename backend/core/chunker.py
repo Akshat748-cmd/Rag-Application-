@@ -1,6 +1,6 @@
 """
 Text Chunking Module
-Supports: Fixed Size, Recursive, Sentence-based, Paragraph, Token, Sliding Window chunking
+Supports: Fixed Size, Recursive, Sentence-based, Paragraph, Token, Sliding Window, Semantic chunking
 """
 import re
 from typing import List, Dict
@@ -326,6 +326,107 @@ def sliding_window_chunk(text: str, chunk_size: int = 100, overlap: int = 50) ->
 
     return chunks
 
+def semantic_chunk(
+    text: str,
+    similarity_threshold: float = 0.75,
+    min_chunk_size: int = 30,
+    max_chunk_size: int = 300
+) -> List[Dict]:
+    """Group sentences into chunks by embedding similarity.
+
+    Algorithm:
+      1. Split text into sentences using the pre-compiled _SENTENCE_RE.
+      2. Embed each sentence with 'all-MiniLM-L6-v2' (lazy-loaded).
+      3. Walk consecutive sentence pairs; start a new chunk when the cosine
+         similarity between adjacent embeddings drops below `similarity_threshold`,
+         or when the current buffer exceeds `max_chunk_size` words.
+      4. Merge any tiny trailing chunk (< min_chunk_size words) into the previous one.
+
+    Args:
+        text: Input text to chunk.
+        similarity_threshold: Cosine similarity below which a new chunk starts (0–1).
+        min_chunk_size: Minimum words per chunk; tiny chunks are merged with the previous.
+        max_chunk_size: Maximum words per chunk before a forced split.
+
+    Returns:
+        List of chunk dicts compatible with all other strategies.
+    """
+    # Lazy import — only needed for this strategy
+    try:
+        import numpy as np
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        raise ImportError(
+            "semantic chunking requires 'sentence-transformers' and 'numpy'. "
+            "Run: pip install sentence-transformers numpy"
+        )
+
+    sentences = [s.strip() for s in _SENTENCE_RE.split(text.strip()) if s.strip()]
+    if not sentences:
+        return []
+
+    if len(sentences) == 1:
+        return [{
+            "id": 0,
+            "text": sentences[0],
+            "word_count": len(sentences[0].split()),
+            "sentence_count": 1,
+            "strategy": "semantic"
+        }]
+
+    # Embed all sentences at once (batch is more efficient)
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    embeddings = model.encode(sentences, show_progress_bar=False, convert_to_numpy=True)
+
+    # Normalise for cosine similarity via dot product
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1e-9, norms)  # avoid div-by-zero
+    embeddings_norm = embeddings / norms
+
+    # Group sentences into semantic chunks
+    groups: List[List[str]] = []
+    current_group: List[str] = [sentences[0]]
+    current_words = len(sentences[0].split())
+
+    for i in range(1, len(sentences)):
+        sim = float(np.dot(embeddings_norm[i - 1], embeddings_norm[i]))
+        sent_words = len(sentences[i].split())
+
+        # Start new chunk on similarity drop OR max_size overflow
+        if sim < similarity_threshold or (current_words + sent_words) > max_chunk_size:
+            groups.append(current_group)
+            current_group = [sentences[i]]
+            current_words = sent_words
+        else:
+            current_group.append(sentences[i])
+            current_words += sent_words
+
+    if current_group:
+        groups.append(current_group)
+
+    # Merge tiny trailing groups into the previous chunk
+    merged: List[List[str]] = []
+    for grp in groups:
+        grp_words = sum(len(s.split()) for s in grp)
+        if merged and grp_words < min_chunk_size:
+            merged[-1].extend(grp)
+        else:
+            merged.append(grp)
+
+    # Build output dicts
+    chunks = []
+    for chunk_id, grp in enumerate(merged):
+        chunk_text = " ".join(grp)
+        chunks.append({
+            "id": chunk_id,
+            "text": chunk_text,
+            "word_count": len(chunk_text.split()),
+            "sentence_count": len(grp),
+            "strategy": "semantic"
+        })
+
+    return chunks
+
 
 def chunk_text(text: str, strategy: str = "fixed", **kwargs) -> List[Dict]:
     """Main chunking function — dispatches to the right strategy."""
@@ -336,6 +437,7 @@ def chunk_text(text: str, strategy: str = "fixed", **kwargs) -> List[Dict]:
         "paragraph":      paragraph_chunk,
         "token":          token_chunk,
         "sliding_window": sliding_window_chunk,
+        "semantic":       semantic_chunk,
     }
     if strategy not in strategies:
         strategy = "fixed"
